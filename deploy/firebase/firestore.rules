@@ -1,0 +1,56 @@
+rules_version = '2';
+// =========================================================
+// Reglas de la base de datos del área de clientes (Firestore)
+// ---------------------------------------------------------
+// Esto es lo que protege los datos de verdad: aunque alguien
+// toque el JavaScript de la web, Firebase solo le deja hacer
+// lo que digan estas reglas.
+//   - Tú (ADMIN) lees y cambias todos los trabajos.
+//   - Cada cliente solo LEE los trabajos guardados con su correo,
+//     y lo único que puede cambiar es aceptar el presupuesto.
+// Si cambias tu correo de administrador, cámbialo aquí y en js/config.js (adminEmail).
+// Para publicarlas: consola de Firebase → Firestore → Reglas → pega este archivo → Publicar.
+// =========================================================
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function conCorreo() {
+      return request.auth != null && request.auth.token.email is string;
+    }
+    function correo() {
+      return request.auth.token.email.lower();
+    }
+    // Correo de fiar: confirmado (correo y contraseña tras abrir el enlace, Google)
+    // o el que dan Facebook y X, que ya lo comprueban ellos.
+    function correoFiable() {
+      return request.auth.token.email_verified == true
+        || request.auth.token.firebase.sign_in_provider in ['facebook.com', 'twitter.com'];
+    }
+    function esAdmin() {
+      return conCorreo() && request.auth.token.email_verified == true
+        && correo() == 'alextoll2005@gmail.com';
+    }
+    function esSuyo() {
+      return conCorreo() && correoFiable() && resource.data.email == correo();
+    }
+
+    match /trabajos/{id} {
+      allow read: if esAdmin() || esSuyo();
+      allow create, delete: if esAdmin();
+      // El cliente solo puede aceptar UNA vez (si ya está aceptado, no se puede volver a tocar)
+      // y la fecha tiene que ser una fecha de verdad (2026-10-20T18:30:00.000Z), no cualquier texto.
+      allow update: if esAdmin() || (esSuyo()
+        && resource.data.get('presupuestoAceptado', false) != true
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['presupuestoAceptado', 'presupuestoAceptadoEn'])
+        && request.resource.data.presupuestoAceptado == true
+        && request.resource.data.presupuestoAceptadoEn is string
+        && request.resource.data.presupuestoAceptadoEn.matches('^20[0-9]{2}-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-5][0-9][.][0-9]{3}Z$'));
+    }
+
+    // Todo lo demás, cerrado
+    match /{todo=**} {
+      allow read, write: if false;
+    }
+  }
+}

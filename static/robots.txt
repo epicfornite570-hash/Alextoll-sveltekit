@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+# gracias.html y estadisticas.html llevan "noindex": no se bloquean aquí
+# para que Google pueda leer ese "noindex" y no las muestre.
+
+Sitemap: https://alextoll.store/sitemap.xml

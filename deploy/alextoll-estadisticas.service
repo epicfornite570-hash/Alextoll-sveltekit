@@ -1,0 +1,28 @@
+# =========================================================
+# Servicio del contador de visitas (systemd)
+# Arranca servidor/api.mjs al encender el servidor y lo reinicia si falla.
+# Instalación: deploy/SUBIR-A-NGINX.md, apartado "Estadísticas".
+# =========================================================
+[Unit]
+Description=Alextoll - contador de visitas y panel de estadisticas
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/node /opt/alextoll/servidor/api.mjs
+Environment=PORT=3001
+Environment=DATA_DIR=/var/lib/alextoll
+# La clave del panel va en este archivo (una línea: STATS_KEY=tu-clave-larga)
+EnvironmentFile=/etc/alextoll.env
+User=www-data
+Group=www-data
+Restart=always
+RestartSec=3
+# Seguridad: solo puede escribir en su carpeta de datos
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/alextoll
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,125 @@
+/* =========================================================
+   ALEXTOLL · Mockups (portátil, tablet y móvil) y webs de ejemplo
+   Compartido por webs.html y la portada (index.html).
+   El HTML lo generan los componentes de src/lib/componentes/mockups/.
+   ========================================================= */
+
+/* ---------- Mockups ----------
+   Cada escenario (.wb-stage) es un contenedor: los tamaños
+   van en cqw y cada dispositivo usa em = 1 % de su ancho. */
+.wb-stage{container-type:inline-size;position:relative}
+.dv{position:absolute;width:var(--w);font-size:calc(var(--w) / 100)}
+.dv-screen{position:relative;overflow:hidden;container-type:inline-size;background:#000}
+/* Reflejo del cristal */
+.dv-screen::after{content:"";position:absolute;inset:0;z-index:9;pointer-events:none;background:linear-gradient(118deg, rgba(255,255,255,.13) 0%, rgba(255,255,255,.03) 28%, rgba(255,255,255,0) 42%)}
+
+/* Portátil */
+.dv-lid{position:relative;padding:2.1em 2.1em 2.5em;border-radius:3.4em 3.4em .8em .8em;background:linear-gradient(180deg,#1f1f23,#0b0b0d);
+  box-shadow:inset 0 0 0 .32em #2c2c31, 0 0 0 .22em #8d8f96, 0 0 0 .3em rgba(255,255,255,.25)}
+.dv-lid::before{content:"";position:absolute;top:.85em;left:50%;width:.8em;height:.8em;margin-left:-.4em;border-radius:50%;background:#2a2b30;box-shadow:inset 0 0 0 .2em #121215}
+.dv-laptop .dv-screen{aspect-ratio:16/10;border-radius:.7em}
+.dv-base{position:relative;height:3.4em;margin:0 -7.5%;border-radius:.4em .4em 50% 50% / .4em .4em 2.6em 2.6em;
+  background:linear-gradient(180deg,#f2f3f6 0%,#c4c6cc 22%,#8f9198 62%,#55575d 100%);box-shadow:0 3em 5em -2em rgba(0,0,0,.95), 0 1em 2em -1em rgba(0,0,0,.8)}
+.dv-base::before{content:"";position:absolute;top:0;left:50%;width:15%;height:1.1em;transform:translateX(-50%);border-radius:0 0 1.2em 1.2em;background:linear-gradient(180deg,#8a8c93,#b9bbc1)}
+
+/* Tablet */
+.dv-tablet{padding:3em;border-radius:7.5em;background:linear-gradient(150deg,#26262b,#09090b 45%,#18181c);
+  box-shadow:inset 0 0 0 .5em #121215, 0 0 0 .55em #9a9ca3, 0 0 0 .7em rgba(255,255,255,.3), 0 4em 7em -2em rgba(0,0,0,.95)}
+.dv-tablet .dv-screen{aspect-ratio:3/4;border-radius:4em}
+
+/* Móvil */
+.dv-phone{padding:3.6em;border-radius:16em;background:#060607;
+  box-shadow:inset 0 0 0 1.1em #141417, 0 0 0 1.1em #a3a5ac, 0 0 0 1.5em rgba(255,255,255,.35), 0 5em 8em -2em rgba(0,0,0,.95)}
+.dv-phone .dv-screen{aspect-ratio:9/19.5;border-radius:12.5em}
+.dv-phone .dv-screen::before{content:"";position:absolute;z-index:10;top:2.6%;left:50%;width:32%;height:3.4%;transform:translateX(-50%);border-radius:99px;background:#000}
+
+/* =========================================================
+   3. WEBS DE EJEMPLO (dentro de los mockups y en las ventanas)
+   --u = 1 % del ancho de la pantalla; --k agranda los textos
+   en la versión vertical (.ms--p)
+   ========================================================= */
+.ms{--u:1cqw;--k:1;--serif:Georgia,"Times New Roman",serif;position:relative;display:flex;flex-direction:column;min-height:100%;
+  font-family:var(--f-sans);line-height:1.3;text-align:left;letter-spacing:0;background:var(--ms-bg);color:var(--ms-ink)}
+.ms i,.ms em{font-style:normal}
+.ms--p{--k:2.3}
+
+.ms-nav{display:flex;align-items:center;gap:calc(var(--u)*3);padding:calc(var(--u)*2.2*var(--k)) calc(var(--u)*4*var(--k));position:relative;z-index:3}
+.ms-logo{font-family:var(--serif);font-size:calc(var(--u)*1.75*var(--k));letter-spacing:.24em;text-transform:uppercase;white-space:nowrap}
+.ms-links{margin-left:auto;display:flex;gap:calc(var(--u)*2.8);font-size:calc(var(--u)*1.2)}
+.ms-links i{opacity:.82}
+.ms-burger{display:none;margin-left:auto;width:calc(var(--u)*2.4*var(--k));height:calc(var(--u)*1.5*var(--k));
+  background:linear-gradient(currentColor,currentColor) top/100% 12% no-repeat, linear-gradient(currentColor,currentColor) center/100% 12% no-repeat, linear-gradient(currentColor,currentColor) bottom/100% 12% no-repeat;opacity:.8}
+.ms--p .ms-links{display:none}
+.ms--p .ms-burger{display:block}
+
+.ms-hero{position:relative;flex:1;display:flex;align-items:center;min-height:calc(var(--u)*46)}
+.ms-img{position:absolute;right:0;top:0;width:60%;height:100%;object-fit:cover;max-width:none}
+.ms-copy{position:relative;z-index:2;display:grid;gap:calc(var(--u)*1.5);justify-items:start;padding:0 calc(var(--u)*4) calc(var(--u)*2);max-width:56%}
+.ms-h{font-family:var(--serif);font-size:calc(var(--u)*5.1);line-height:1.04;letter-spacing:-.01em}
+.ms-p{font-size:calc(var(--u)*1.55*var(--k));color:var(--ms-muted);line-height:1.4}
+.ms-btn{display:inline-block;margin-top:calc(var(--u)*.8*var(--k));padding:calc(var(--u)*1.05*var(--k)) calc(var(--u)*2.6*var(--k));border-radius:999px;
+  font-size:calc(var(--u)*1.3*var(--k));font-weight:600;line-height:1.2;background:var(--ms-btn);color:var(--ms-btn-ink);white-space:nowrap}
+
+/* Versión vertical: la foto arriba y el texto debajo */
+.ms--p .ms-hero{flex:none;flex-direction:column;align-items:stretch;min-height:0}
+.ms.ms--p .ms-img{position:relative;right:auto;top:auto;width:auto;height:auto;aspect-ratio:16/12;margin:calc(var(--u)*1) calc(var(--u)*6) 0;border-radius:calc(var(--u)*4)}
+.ms--p .ms-copy{max-width:none;padding:calc(var(--u)*7) calc(var(--u)*6) calc(var(--u)*9);gap:calc(var(--u)*3)}
+.ms--p .ms-h{font-size:calc(var(--u)*10.5)}
+
+/* Resto de la página de ejemplo */
+.ms-sec{padding:calc(var(--u)*6) calc(var(--u)*4);display:grid;gap:calc(var(--u)*1.2*var(--k))}
+.ms-eb{font-size:calc(var(--u)*1.05*var(--k));letter-spacing:.24em;text-transform:uppercase;color:var(--ms-muted)}
+.ms-h2{font-family:var(--serif);font-size:calc(var(--u)*3.1*var(--k));line-height:1.1}
+.ms-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:calc(var(--u)*2);margin-top:calc(var(--u)*2*var(--k))}
+.ms-item{display:grid;gap:calc(var(--u)*.6*var(--k));align-content:start;padding:calc(var(--u)*2.2*var(--k));border-radius:calc(var(--u)*1.4*var(--k));background:var(--ms-card)}
+.ms-item b{font-size:calc(var(--u)*1.5*var(--k));font-weight:600}
+.ms-item span{font-size:calc(var(--u)*1.25*var(--k));color:var(--ms-muted)}
+.ms-item em{font-size:calc(var(--u)*1.4*var(--k));font-weight:600}
+.ms-thumb{width:100%;aspect-ratio:1;object-fit:cover;border-radius:calc(var(--u)*1*var(--k));margin-bottom:calc(var(--u)*.6*var(--k));max-width:none}
+.ms-thumb--1{object-position:72% 70%}
+.ms-thumb--2{object-position:18% 40%}
+.ms-thumb--3{object-position:70% 8%}
+.ms-band{margin:0 calc(var(--u)*4) calc(var(--u)*6);padding:calc(var(--u)*5*var(--k)*.7) calc(var(--u)*4);border-radius:calc(var(--u)*2*var(--k));display:grid;gap:calc(var(--u)*1.2*var(--k));justify-items:start;background:var(--ms-band)}
+.ms-foot{display:flex;flex-wrap:wrap;align-items:center;gap:calc(var(--u)*1*var(--k)) calc(var(--u)*3);padding:calc(var(--u)*3*var(--k)) calc(var(--u)*4);border-top:1px solid var(--ms-line);font-size:calc(var(--u)*1.15*var(--k));color:var(--ms-muted);margin-top:auto}
+.ms-foot .ms-logo{font-size:calc(var(--u)*1.4*var(--k));color:var(--ms-ink)}
+.ms-foot span:last-child{margin-left:auto}
+.ms--p .ms-sec{padding:calc(var(--u)*10) calc(var(--u)*6)}
+.ms--p .ms-grid{grid-template-columns:1fr;gap:calc(var(--u)*3.5)}
+.ms--p .ms-band{margin:0 calc(var(--u)*6) calc(var(--u)*10);padding:calc(var(--u)*8) calc(var(--u)*6)}
+.ms--p .ms-foot{padding:calc(var(--u)*6)}
+.ms--p .ms-foot span:last-child{margin-left:0}
+.ms--p .ms-menu .ms-item{grid-template-columns:1fr auto}
+
+/* La carta del restaurante: líneas con precio a la derecha */
+.ms-menu .ms-item{grid-template-columns:1fr auto;align-items:baseline;background:none;border-bottom:1px solid var(--ms-line);border-radius:0;padding-inline:0}
+.ms-menu .ms-item span{grid-column:1/-1;order:3}
+.ms-menu .ms-item em{order:2}
+
+/* Marcas (colores de cada negocio ficticio) */
+.ms-brasa{--ms-bg:#0C0907;--ms-ink:#F4EDE4;--ms-muted:rgba(244,237,228,.68);--ms-btn:#EFE6D8;--ms-btn-ink:#1A120C;--ms-card:rgba(244,237,228,.05);--ms-band:linear-gradient(120deg,#2A1A10,#120C08);--ms-line:rgba(244,237,228,.12)}
+.ms-brasa .ms-hero::before{content:"";position:absolute;inset:0;z-index:1;background:linear-gradient(90deg,#0C0907 34%,rgba(12,9,7,.7) 52%,rgba(12,9,7,.05) 78%)}
+.ms-brasa .ms-img{width:72%}
+.ms-brasa .ms-h{font-style:italic}
+.ms-brasa.ms--p .ms-hero::before{display:none}
+
+.ms-nativa{--ms-bg:#F3EFE8;--ms-ink:#2B2722;--ms-muted:#70685E;--ms-btn:#E2D4C1;--ms-btn-ink:#2B2722;--ms-card:#FBF9F5;--ms-band:#E9E1D5;--ms-line:rgba(43,39,34,.12)}
+.ms-nativa .ms-img{right:5%;top:6%;width:34%;height:88%;border-radius:calc(var(--u)*20) calc(var(--u)*20) calc(var(--u)*1.2) calc(var(--u)*1.2)}
+.ms-nativa.ms--p .ms-img{aspect-ratio:16/11;border-radius:calc(var(--u)*40) calc(var(--u)*40) calc(var(--u)*3) calc(var(--u)*3);object-position:50% 70%}
+
+.ms-nord{--ms-bg:#EFE9E1;--ms-ink:#26231F;--ms-muted:#6E665C;--ms-btn:#1F1D1A;--ms-btn-ink:#F5F1EA;--ms-card:#F8F4EE;--ms-band:#E4DCD1;--ms-line:rgba(38,35,31,.12)}
+.ms-nord .ms-img{right:4%;top:5%;width:40%;height:90%;border-radius:calc(var(--u)*1.6)}
+.ms-nord.ms--p .ms-img{aspect-ratio:1/1}
+
+.ms-lumen{--ms-bg:#050506;--ms-ink:#F5F5F7;--ms-muted:rgba(245,245,247,.62);--ms-btn:#FFFFFF;--ms-btn-ink:#000;--ms-line:rgba(255,255,255,.1)}
+.ms-lumen .ms-h{font-family:var(--f-sans);font-weight:650;letter-spacing:-.04em;background:var(--silver);-webkit-background-clip:text;background-clip:text;color:transparent}
+.ms-lumen .ms-logo{font-family:var(--f-sans);font-weight:700}
+/* Onda líquida plateada hecha con degradados */
+.ms-liquid{position:absolute;right:-8%;top:-10%;width:70%;height:120%;border-radius:46% 54% 38% 62% / 52% 38% 62% 48%;
+  background:radial-gradient(60% 50% at 40% 40%, rgba(255,255,255,.85), rgba(200,204,212,.35) 40%, rgba(255,255,255,0) 70%),
+             radial-gradient(40% 60% at 70% 65%, rgba(170,176,190,.6), transparent 70%),
+             conic-gradient(from 200deg at 50% 50%, #0b0b0e, #6c6f78, #f3f4f7, #5b5e66, #0b0b0e);
+  filter:blur(calc(var(--u)*1.4));opacity:.75;animation:wb-blob 14s ease-in-out infinite alternate}
+@keyframes wb-blob{to{border-radius:58% 42% 55% 45% / 40% 60% 40% 60%;transform:rotate(18deg) scale(1.05)}}
+
+
+@media (prefers-reduced-motion: reduce){ .ms-liquid{animation:none} }

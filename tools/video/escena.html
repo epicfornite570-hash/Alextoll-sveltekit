@@ -1,0 +1,846 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Escena del vídeo de fondo</title>
+<!--
+  ESCENA DEL VÍDEO DE LA CABECERA
+  Vuelo rasante sobre una placa base de noche: pulsos de corriente
+  por las pistas y un barrido de diagnóstico cada vuelta.
+
+  - Ábrela con doble clic para verla en directo (se repite sola).
+  - tools/video/generar-video.cjs la abre en Chrome, saca cada fotograma
+    y monta los vídeos de assets/video/ con ffmpeg.
+
+  Parámetros de la dirección (los pone el generador):
+    ?v=horizontal | vertical     encuadre (ordenador o móvil)
+    &w=1920&h=1080               tamaño en píxeles
+    &accent=FFB000               color de acento (sale de css/tokens.css)
+    &render                      modo fotograma a fotograma (sin animación)
+    &cam=x,y,z,inclinación,giro,campo   cámara fija (fotos de las tarjetas)
+    &polvo=3                     más motas de polvo en el aire
+    &anillos=0                   sin los anillos de luz del horizonte
+
+  Todo depende solo del instante p (de 0 a 1): el fotograma 0 y el
+  último encajan, así que el vídeo se repite sin saltos.
+-->
+<style>
+html,body{margin:0;height:100%;background:#000;overflow:hidden}
+canvas{display:block;width:100%;height:100%;object-fit:cover}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+'use strict';
+
+/* =========================================================
+   1. Parámetros
+   ========================================================= */
+const Q = new URLSearchParams(location.search);
+const RENDER = Q.has('render');
+const VERTICAL = Q.get('v') === 'vertical';
+const SEGUNDOS = 12;                       // duración de una vuelta (el generador usa la misma)
+
+const hex = (h) => { h = String(h || '').replace('#', ''); return h.length === 6 ? [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)) : null; };
+const ACENTO = hex(Q.get('accent')) || [220, 226, 234];  // plata
+const CAM_FIJA = Q.get('cam') ? Q.get('cam').split(',').map(Number) : null;
+const POLVO = +Q.get('polvo') || 1;
+const ANILLOS = Q.get('anillos') !== '0';
+const mezcla = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+const por = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+
+/* Paleta: negro, grises de componente y todo lo demás sale del acento */
+const COL = {
+  placa:  [5, 5, 4],
+  bruma:  por(ACENTO, .11),                // el horizonte se funde en este tono
+  pista:  mezcla([20, 18, 16], por(ACENTO, .2), .4),
+  estano: [40, 38, 35],
+  chip:   [23, 22, 21],
+  chipTop:[30, 29, 27],
+  bobina: [30, 29, 27],
+  conde:  [40, 39, 37],
+  smd:    [58, 58, 60],
+  dimm:   [17, 18, 17],
+  ranura: [19, 18, 17],
+  borde:  [62, 58, 53],
+  caliente: mezcla(ACENTO, [255, 255, 255], .72)
+};
+
+/* =========================================================
+   2. Lienzos
+   ========================================================= */
+let W, H;
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+const gcv = document.createElement('canvas');           // capa de brillo (a media resolución)
+const g = gcv.getContext('2d');
+
+function tamano(w, h) {
+  W = cv.width = Math.round(w); H = cv.height = Math.round(h);
+  gcv.width = Math.round(W / 2); gcv.height = Math.round(H / 2);
+}
+
+/* =========================================================
+   3. Utilidades
+   ========================================================= */
+function aleatorio(seed) {                               // mulberry32: mismo resultado siempre
+  return function () {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+const rad = (d) => d * Math.PI / 180;
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const suave = (t) => t * t * (3 - 2 * t);
+const TAU = Math.PI * 2;
+const rgb = (c, a = 1) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+
+/* =========================================================
+   4. La placa (se genera una vez y se repite en el espacio)
+   La cámara avanza LARGO unidades por vuelta: el mismo trozo de
+   placa vuelve a estar en el mismo sitio y el bucle encaja.
+   ========================================================= */
+const LARGO = 32, ANCHO = 100;
+
+function crearPlaca(seed) {
+  const R = aleatorio(seed);
+  const rnd = (a, b) => a + (b - a) * R();
+  const elige = (arr) => arr[Math.floor(R() * arr.length)];
+  const P = { pistas: [], buses: [], pads: [], vias: [], solidos: [], leds: [], motas: [] };
+  const ocupado = [];
+  const libre = (x0, y0, x1, y1, m = .7) =>
+    x0 > -ANCHO / 2 + 1 && x1 < ANCHO / 2 - 1 && y0 > .7 && y1 < LARGO - .7 &&
+    !ocupado.some(o => x0 < o[2] + m && x1 > o[0] - m && y0 < o[3] + m && y1 > o[1] - m);
+  const ocupar = (x0, y0, x1, y1) => ocupado.push([x0, y0, x1, y1]);
+
+  /* Piezas básicas */
+  const caja = (x0, y0, x1, y1, z0, z1, col, extra = {}) => ({ t: 'caja', x0, y0, x1, y1, z0, z1, col, ...extra });
+  const grupo = (partes, extra = {}) => {
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9, z1 = 0;
+    partes.forEach(p => { x0 = Math.min(x0, p.x0); y0 = Math.min(y0, p.y0); x1 = Math.max(x1, p.x1); y1 = Math.max(y1, p.y1); z1 = Math.max(z1, p.z1); });
+    P.solidos.push({ partes, x0, y0, x1, y1, z1, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, ...extra });
+  };
+  const pad = (x0, y0, x1, y1, col = COL.estano) => P.pads.push([x0, y0, x1, y1, col]);
+
+  /* ---- Autopista central: bus de pistas a lo largo del vuelo ---- */
+  const bus = (xc, n, sep, w, prob) => {
+    for (let i = 0; i < n; i++) {
+      const linea = { x: xc + (i - (n - 1) / 2) * sep, w, pulsos: null };
+      if (R() < prob) {
+        const np = elige([1, 2, 2]);
+        linea.pulsos = { np, D: elige([2, 2, 3, 3, -1]), fase: R(), largo: rnd(2.5, 6) };
+      }
+      P.buses.push(linea);
+    }
+  };
+  bus(0, 12, .55, .17, .7);
+  bus(-4.1, 4, .5, .15, .5);
+  bus(17.6, 6, .5, .15, .6);
+  bus(-17, 5, .5, .15, .5);
+
+  /* ---- Etapa de alimentación (VRM): filas que se repiten cada 4 ---- */
+  for (let j = 0; j < 8; j++) {
+    const y = 2 + j * 4;
+    // Transistor de potencia con sus patas
+    grupo([caja(-7.1, y - .8, -5.9, y + .8, 0, .42, COL.chip)]);
+    for (let k = 0; k < 3; k++) pad(-5.9, y - .6 + k * .55, -5.45, y - .42 + k * .55);
+    pad(-7.5, y - .7, -7.1, y + .7);
+    // Bobina (cuadrada, con su marca redonda)
+    grupo([caja(-10.6, y - 1.3, -8, y + 1.3, 0, 1.9, COL.bobina, { marca: 'aro' })]);
+    pad(-10.9, y - 1, -10.6, y + 1); pad(-8, y - 1, -7.7, y + 1);
+    // Condensador electrolítico
+    P.solidos.push({ partes: [{ t: 'cil', x: -12.9, y: y + .2, r: .95, z0: 0, z1: 2.7, col: COL.conde }], x0: -13.9, y0: y - .8, x1: -11.9, y1: y + 1.2, z1: 2.7, cx: -12.9, cy: y + .2 });
+    ocupar(-14, y - 1.4, -5.4, y + 1.4);
+  }
+
+  /* ---- Memoria RAM: cuatro módulos de pie ---- */
+  [6.6, 8.9, 11.2, 13.5].forEach((x, i) => {
+    const ya = 2.4, yb = 29.6, trozos = 4, paso = (yb - ya) / trozos;
+    for (let k = 0; k < trozos; k++) {                    // en trozos para que se ordenen bien al dibujar
+      const y0 = ya + k * paso, y1 = y0 + paso;
+      const partes = [
+        caja(x - .5, y0, x + .5, y1, 0, .9, COL.ranura),
+        caja(x - .09, y0 + (k ? 0 : .3), x + .09, y1 - (k === trozos - 1 ? .3 : 0), .9, 4.3, COL.dimm, { rim: true })
+      ];
+      for (let c = 0; c < 2; c++) {                       // chips de memoria en las dos caras
+        const cy0 = y0 + .55 + c * (paso / 2), cy1 = cy0 + paso / 2 - 1.1;
+        partes.push(caja(x - .22, cy0, x - .09, cy1, 1.6, 3.4, COL.chip, { cara: -1 }));
+        partes.push(caja(x + .09, cy0, x + .22, cy1, 1.6, 3.4, COL.chip, { cara: 1 }));
+      }
+      grupo(partes, { dimm: x });
+    }
+    if (i === 0) for (let k = 0; k < 6; k++) P.leds.push({ x: x + .9, y: 4 + k * 4.4, k: elige([6, 9, 12]), fase: R(), fijo: false });
+  });
+  ocupar(5.8, 2, 14.4, 30);
+
+  /* ---- Relleno: chips, conectores, condensadores y pasivos ---- */
+  const zonas = [[-49, -19.5], [-15.2, -14.3], [19.8, 49]];
+  const tipos = ['qfp', 'qfp', 'bga', 'bga', 'soic', 'soic', 'soic', 'caps', 'caps', 'pines', 'disip', 'cristal', 'smd', 'smd', 'smd', 'smd', 'smd'];
+  for (let n = 0; n < 900; n++) {
+    const z = R() < .5 ? zonas[0] : zonas[2];
+    const tipo = elige(tipos);
+    const x = rnd(z[0], z[1]), y = rnd(1, LARGO - 1);
+    if (tipo === 'qfp') {
+      const s = rnd(3, 5.5), x0 = x, y0 = y, x1 = x + s, y1 = y + s;
+      if (!libre(x0 - .7, y0 - .7, x1 + .7, y1 + .7)) continue;
+      ocupar(x0 - .7, y0 - .7, x1 + .7, y1 + .7);
+      grupo([caja(x0, y0, x1, y1, 0, .5, COL.chip, { marca: 'punto', rim: true })]);
+      const np = Math.floor(s / .5);
+      for (let k = 0; k < np; k++) {
+        const t = x0 + .3 + k * (s - .6) / (np - 1);
+        const u = y0 + .3 + k * (s - .6) / (np - 1);
+        pad(t - .09, y0 - .6, t + .09, y0); pad(t - .09, y1, t + .09, y1 + .6);
+        pad(x0 - .6, u - .09, x0, u + .09); pad(x1, u - .09, x1 + .6, u + .09);
+      }
+    } else if (tipo === 'bga') {
+      const s = rnd(4, 8.5), x0 = x, y0 = y, x1 = x + s, y1 = y + s;
+      if (!libre(x0, y0, x1, y1)) continue;
+      ocupar(x0, y0, x1, y1);
+      const d = s * rnd(.42, .58), dx = x0 + (s - d) / 2, dy = y0 + (s - d) / 2;
+      grupo([caja(x0, y0, x1, y1, 0, .35, [24, 30, 26]), caja(dx, dy, dx + d, dy + d, .35, .75, COL.chipTop, { rim: true, marca: 'texto' })]);
+      for (let k = 0; k < 10; k++) {                    // condensadores diminutos alrededor
+        const a = R() * TAU, rr = s * .5 + .5;
+        const px = x0 + s / 2 + Math.cos(a) * rr, py = y0 + s / 2 + Math.sin(a) * rr;
+        if (libre(px - .3, py - .2, px + .3, py + .2, .1)) { ocupar(px - .3, py - .2, px + .3, py + .2); grupo([caja(px - .3, py - .16, px + .3, py + .16, 0, .25, COL.smd, { smd: true })]); }
+      }
+    } else if (tipo === 'soic') {
+      const largo = rnd(2, 4), vertical = R() < .5;
+      const x0 = x, y0 = y, x1 = x + (vertical ? 1.5 : largo), y1 = y + (vertical ? largo : 1.5);
+      if (!libre(x0 - .5, y0 - .5, x1 + .5, y1 + .5)) continue;
+      ocupar(x0 - .5, y0 - .5, x1 + .5, y1 + .5);
+      grupo([caja(x0, y0, x1, y1, 0, .45, COL.chip, { marca: 'punto' })]);
+      const np = Math.floor(largo / .5);
+      for (let k = 0; k < np; k++) {
+        const t = (vertical ? y0 : x0) + .25 + k * (largo - .5) / Math.max(1, np - 1);
+        if (vertical) { pad(x0 - .45, t - .09, x0, t + .09); pad(x1, t - .09, x1 + .45, t + .09); }
+        else { pad(t - .09, y0 - .45, t + .09, y0); pad(t - .09, y1, t + .09, y1 + .45); }
+      }
+    } else if (tipo === 'caps') {
+      const n2 = 2 + Math.floor(R() * 4), r = rnd(.55, .95), h = rnd(1.4, 2.6);
+      const x1 = x + n2 * (2 * r + .3), y1 = y + 2 * r;
+      if (!libre(x, y, x1, y1)) continue;
+      ocupar(x, y, x1, y1);
+      for (let k = 0; k < n2; k++) {
+        const cx = x + r + k * (2 * r + .3), cy = y + r;
+        P.solidos.push({ partes: [{ t: 'cil', x: cx, y: cy, r, z0: 0, z1: h, col: COL.conde }], x0: cx - r, y0: cy - r, x1: cx + r, y1: cy + r, z1: h, cx, cy });
+      }
+    } else if (tipo === 'pines') {
+      const n2 = 4 + Math.floor(R() * 9), vertical = R() < .5;
+      const x1 = x + (vertical ? 1.6 : n2 * .8), y1 = y + (vertical ? n2 * .8 : 1.6);
+      if (!libre(x, y, x1, y1)) continue;
+      ocupar(x, y, x1, y1);
+      const partes = [caja(x, y, x1, y1, 0, .55, [20, 20, 19])];
+      for (let k = 0; k < n2; k++) for (let f = 0; f < 2; f++) {
+        const px = vertical ? x + .4 + f * .8 : x + .4 + k * .8, py = vertical ? y + .4 + k * .8 : y + .4 + f * .8;
+        partes.push(caja(px - .08, py - .08, px + .08, py + .08, .55, 1.9, COL.caliente.map(v => v * .45), { pin: true }));
+      }
+      grupo(partes);
+    } else if (tipo === 'disip') {
+      const s = rnd(7, 10), x1 = x + s, y1 = y + s * .8;
+      if (!libre(x, y, x1, y1)) continue;
+      ocupar(x, y, x1, y1);
+      const partes = [caja(x, y, x1, y1, 0, .6, [30, 30, 30])];
+      const n2 = 9, paso = s / n2;
+      for (let k = 0; k < n2; k++) partes.push(caja(x + k * paso + paso * .3, y + .2, x + k * paso + paso * .7, y1 - .2, .6, 3.6, [44, 44, 43], { aleta: true, rim: true }));
+      grupo(partes, { aletas: true });
+    } else if (tipo === 'cristal') {
+      const x1 = x + 2.2, y1 = y + 1;
+      if (!libre(x, y, x1, y1)) continue;
+      ocupar(x, y, x1, y1);
+      grupo([caja(x, y, x1, y1, 0, .7, [90, 88, 84], { rim: true })]);
+    } else {                                           // fila de pasivos SMD
+      const n2 = 3 + Math.floor(R() * 7), vertical = R() < .5;
+      const x1 = x + (vertical ? .7 : n2 * .75), y1 = y + (vertical ? n2 * .75 : .7);
+      if (!libre(x, y, x1, y1, .3)) continue;
+      ocupar(x, y, x1, y1);
+      for (let k = 0; k < n2; k++) {
+        const px = vertical ? x + .35 : x + .375 + k * .75, py = vertical ? y + .375 + k * .75 : y + .35;
+        const negro = R() < .35;
+        grupo([caja(px - (vertical ? .3 : .16), py - (vertical ? .16 : .3), px + (vertical ? .3 : .16), py + (vertical ? .16 : .3), 0, .24, negro ? [26, 25, 24] : COL.smd, { smd: true })]);
+      }
+      if (R() < .3) P.leds.push({ x: x1 + .5, y: y + .3, k: elige([6, 9, 12, 18]), fase: R(), fijo: R() < .3 });
+    }
+  }
+
+  /* ---- Pistas: grupos paralelos con giros de 45 grados ---- */
+  const DIRS = [[1, 0], [.7071, .7071], [0, 1], [-.7071, .7071], [-1, 0], [-.7071, -.7071], [0, -1], [.7071, -.7071]];
+  const dentro = (x, y) => x > -ANCHO / 2 + .8 && x < ANCHO / 2 - .8 && y > .8 && y < LARGO - .8;
+  for (let n = 0; n < 150; n++) {
+    const lado = R() < .5 ? -1 : 1;
+    let x = lado < 0 ? rnd(-48, -16) : rnd(16, 48), y = rnd(2, LARGO - 2);
+    let d = elige([0, 2, 4, 6]);
+    const pts = [[x, y]];
+    const tramos = 2 + Math.floor(R() * 4);
+    for (let s = 0; s < tramos; s++) {
+      const diag = d % 2 === 1;
+      const len = diag ? rnd(.7, 2.6) : rnd(1.5, 9);
+      const nx = x + DIRS[d][0] * len, ny = y + DIRS[d][1] * len;
+      if (!dentro(nx, ny)) break;
+      x = nx; y = ny; pts.push([x, y]);
+      d = (d + (R() < .5 ? 1 : 7)) % 8;
+    }
+    if (pts.length < 2) continue;
+    const nl = elige([1, 1, 2, 3, 4, 4, 6, 8]), sep = .42, w = rnd(.12, .18);
+    const lineas = desplazar(pts, nl, sep);
+    if (lineas.some(l => l.some(p => !dentro(p[0], p[1])))) continue;
+    const conPulsos = R() < .5, k = elige([1, 1, 2]), sentido = R() < .5, largo = rnd(1.4, 3.2), fase = R();
+    lineas.forEach((l, i) => {
+      const pista = medir({ pts: l, w });
+      if (conPulsos) pista.pulso = { k, sentido, largo, fase: (fase + i * .035) % 1 };
+      P.pistas.push(pista);
+      P.vias.push([l[0][0], l[0][1]], [l[l.length - 1][0], l[l.length - 1][1]]);
+    });
+  }
+  /* Vías sueltas en la autopista (saltos de capa) */
+  for (let k = 0; k < 40; k++) P.vias.push([rnd(-48, 48), rnd(1, LARGO - 1)]);
+
+  /* ---- Motas de polvo en el aire ---- */
+  for (let k = 0; k < 170 * POLVO; k++) {
+    P.motas.push({ x: rnd(-ANCHO / 2, ANCHO / 2), y: rnd(0, LARGO), z: rnd(.4, 8), r: rnd(.012, .045),
+      kx: elige([1, 1, 2]), kz: elige([1, 2]), f1: R(), f2: R(), amp: rnd(.2, .7), luz: rnd(.35, 1), blanca: R() < .3 });
+  }
+  return P;
+}
+
+/* Copia una polilínea en n líneas paralelas (esquinas en inglete) */
+function desplazar(pts, n, sep) {
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const off = (i - (n - 1) / 2) * sep, l = [];
+    for (let j = 0; j < pts.length; j++) {
+      const a = pts[Math.max(0, j - 1)], b = pts[j], c = pts[Math.min(pts.length - 1, j + 1)];
+      const d1 = norm(j ? [b[0] - a[0], b[1] - a[1]] : [c[0] - b[0], c[1] - b[1]]);
+      const d2 = norm(j < pts.length - 1 ? [c[0] - b[0], c[1] - b[1]] : d1);
+      const n1 = [-d1[1], d1[0]], n2 = [-d2[1], d2[0]];
+      const m = norm([n1[0] + n2[0], n1[1] + n2[1]]);
+      const k = off / Math.max(.3, m[0] * n1[0] + m[1] * n1[1]);
+      l.push([b[0] + m[0] * k, b[1] + m[1] * k]);
+    }
+    out.push(l);
+  }
+  return out;
+}
+function norm(v) { const l = Math.hypot(v[0], v[1]) || 1; return [v[0] / l, v[1] / l]; }
+function medir(p) {
+  p.acum = [0];
+  for (let i = 1; i < p.pts.length; i++) p.acum.push(p.acum[i - 1] + Math.hypot(p.pts[i][0] - p.pts[i - 1][0], p.pts[i][1] - p.pts[i - 1][1]));
+  p.len = p.acum[p.acum.length - 1];
+  return p;
+}
+/* Trozo de una pista entre las distancias s0 y s1 */
+function tramo(p, s0, s1) {
+  const out = [];
+  const punto = (s) => {
+    let i = 1; while (i < p.acum.length - 1 && p.acum[i] < s) i++;
+    const a = p.pts[i - 1], b = p.pts[i], t = (s - p.acum[i - 1]) / ((p.acum[i] - p.acum[i - 1]) || 1);
+    return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+  };
+  out.push(punto(s0));
+  for (let i = 1; i < p.acum.length - 1; i++) if (p.acum[i] > s0 && p.acum[i] < s1) out.push(p.pts[i]);
+  out.push(punto(s1));
+  return out;
+}
+
+const PLACA = crearPlaca(20261003);
+
+/* =========================================================
+   5. Cámara
+   ========================================================= */
+function camara(p) {
+  const a = p * TAU;
+  if (CAM_FIJA) { const [x, y, z, inc, giro, campo] = CAM_FIJA; return { x, y: y + LARGO * p, z, pitch: rad(inc), yaw: rad(giro), vfov: rad(campo || 42) }; }
+  if (VERTICAL) return { x: -.8 + .7 * Math.sin(a), y: LARGO * p, z: 6.8 + .35 * Math.sin(a + 1), pitch: rad(17 + .8 * Math.sin(a + 2)), yaw: rad(-1.5 + 1.5 * Math.sin(a)), vfov: rad(66) };
+  return { x: -3.6 + 1 * Math.sin(a), y: LARGO * p, z: 6 + .35 * Math.sin(a + 1), pitch: rad(9.5 + .6 * Math.sin(a + 2)), yaw: rad(-13 + 1.6 * Math.sin(a)), vfov: rad(42) };
+}
+
+let C, RX, RY, UX, UY, UZ, FX, FY, FZ, F, CX, CY;
+function fijarCamara(cam) {
+  C = cam;
+  const sy = Math.sin(cam.yaw), cy = Math.cos(cam.yaw), sp = Math.sin(cam.pitch), cp = Math.cos(cam.pitch);
+  FX = sy * cp; FY = cy * cp; FZ = -sp;
+  RX = cy; RY = -sy;
+  UX = sy * sp; UY = cy * sp; UZ = cp;
+  F = (H / 2) / Math.tan(cam.vfov / 2); CX = W / 2; CY = H / 2;
+}
+const CERCA = .3;
+const NIEBLA0 = 9, NIEBLAK = 22, LEJOS = 64;
+const niebla = (z) => z <= NIEBLA0 ? 0 : 1 - Math.exp(-(z - NIEBLA0) / NIEBLAK);
+const conNiebla = (c, z) => mezcla(c, COL.bruma, niebla(z));
+const prof = (x, y, z) => (x - C.x) * FX + (y - C.y) * FY + (z - C.z) * FZ;
+
+/* Proyecta un polígono 3D: recorta por delante de la cámara y devuelve
+   los puntos en pantalla (o null si no se ve) */
+const _q = [];
+function proyectar(pts) {
+  let dentro = 0;
+  _q.length = 0;
+  for (const p of pts) {
+    const dx = p[0] - C.x, dy = p[1] - C.y, dz = p[2] - C.z;
+    const q = [dx * RX + dy * RY, dx * UX + dy * UY + dz * UZ, dx * FX + dy * FY + dz * FZ];
+    if (q[2] > CERCA) dentro++;
+    _q.push(q);
+  }
+  if (!dentro) return null;
+  let qs = _q;
+  if (dentro < _q.length) {                             // recorte contra el plano cercano
+    qs = [];
+    for (let i = 0; i < _q.length; i++) {
+      const a = _q[i], b = _q[(i + 1) % _q.length];
+      const ai = a[2] > CERCA, bi = b[2] > CERCA;
+      if (ai) qs.push(a);
+      if (ai !== bi) { const t = (CERCA - a[2]) / (b[2] - a[2]); qs.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, CERCA]); }
+    }
+  }
+  const out = [];
+  let minx = 1e9, maxx = -1e9, miny = 1e9, maxy = -1e9;
+  for (const q of qs) {
+    const sx = CX + F * q[0] / q[2], sy = CY - F * q[1] / q[2];
+    out.push(sx, sy);
+    if (sx < minx) minx = sx; if (sx > maxx) maxx = sx; if (sy < miny) miny = sy; if (sy > maxy) maxy = sy;
+  }
+  if (maxx < -20 || minx > W + 20 || maxy < -20 || miny > H + 20) return null;
+  return out;
+}
+function camino(c, s) { c.beginPath(); c.moveTo(s[0], s[1]); for (let i = 2; i < s.length; i += 2) c.lineTo(s[i], s[i + 1]); c.closePath(); }
+function rellenar(c, s, color) { camino(c, s); c.fillStyle = color; c.fill(); }
+function enGlow(fn) { g.save(); g.setTransform(.5, 0, 0, .5, 0, 0); fn(g); g.restore(); }
+
+/* Rectángulo apoyado en la placa alrededor del segmento a-b (ancho w) */
+function cinta(ax, ay, bx, by, w, z = 0, alarga = true) {
+  const l = Math.hypot(bx - ax, by - ay) || 1, ux = (bx - ax) / l, uy = (by - ay) / l, nx = -uy * w / 2, ny = ux * w / 2;
+  const e = alarga ? w / 2 : 0;
+  const a0x = ax - ux * e, a0y = ay - uy * e, b0x = bx + ux * e, b0y = by + uy * e;
+  return proyectar([[a0x + nx, a0y + ny, z], [b0x + nx, b0y + ny, z], [b0x - nx, b0y - ny, z], [a0x - nx, a0y - ny, z]]);
+}
+
+/* =========================================================
+   6. Dibujo de un fotograma
+   ========================================================= */
+function dibujar(p) {
+  anillos.p = p;
+  const cam = camara(p);
+  fijarCamara(cam);
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.globalCompositeOperation = 'source-over';
+  g.fillStyle = '#000'; g.fillRect(0, 0, gcv.width, gcv.height);
+
+  cieloYSuelo(cam);
+
+  /* Trozos de placa que se ven (la placa se repite en x e y) */
+  const copias = [];
+  const iy0 = Math.floor((cam.y - 10) / LARGO), iy1 = Math.floor((cam.y + LEJOS) / LARGO);
+  for (let iy = iy0; iy <= iy1; iy++) for (let ix = -1; ix <= 1; ix++) copias.push([ix * ANCHO, iy * LARGO]);
+
+  pistas(copias, p);
+  barrido(p, cam);
+  solidos(copias, p);
+  leds(copias, p);
+  motas(copias, p);
+  postproceso(cam);
+}
+
+/* Cielo negro, bruma en el horizonte y la placa fundiéndose en ella */
+function cieloYSuelo(cam) {
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+  const sp = Math.sin(cam.pitch), cp = Math.cos(cam.pitch);
+  const yh = CY - F * Math.tan(cam.pitch);              // línea del horizonte
+  const cielo = ctx.createLinearGradient(0, yh - H * .45, 0, yh);
+  cielo.addColorStop(0, '#000'); cielo.addColorStop(.75, rgb(por(COL.bruma, .45))); cielo.addColorStop(1, rgb(COL.bruma));
+  ctx.fillStyle = cielo; ctx.fillRect(0, 0, W, Math.max(0, yh + 1));
+  if (ANILLOS) anillos(cam, yh);
+  const suelo = ctx.createLinearGradient(0, yh, 0, H);
+  for (let i = 0; i <= 16; i++) {
+    const sy = yh + (H - yh) * (i / 16) ** 1.6, v = (sy - CY) / F;
+    const z = cam.z / Math.max(1e-4, sp + v * cp);
+    suelo.addColorStop(clamp((sy - yh) / Math.max(1, H - yh), 0, 1), rgb(conNiebla(COL.placa, z)));
+  }
+  ctx.fillStyle = suelo; ctx.fillRect(0, Math.max(0, yh), W, H);
+}
+
+/* Anillos de luz que asoman por el horizonte, al fondo de la autopista */
+function anillos(cam, yh) {
+  const vx = CX - F * Math.tan(cam.yaw) / Math.cos(cam.pitch);
+  const R = Math.min(W, H) * (VERTICAL ? .44 : .3);
+  const cy = yh + R * .12, vivo = .92 + .08 * Math.sin(TAU * (anillos.p || 0));
+  [[1, .75, .0028], [1.36, .32, .0018]].forEach(([k, a, gr]) => {
+    const r = R * k;
+    const trazo = (c, ancho, alfa) => {
+      const cono = c.createConicGradient(-Math.PI / 2 - .9, vx, cy);
+      cono.addColorStop(0, rgb(COL.caliente, alfa)); cono.addColorStop(.22, rgb(ACENTO, alfa * .55));
+      cono.addColorStop(.5, rgb(ACENTO, alfa * .12)); cono.addColorStop(.78, rgb(ACENTO, alfa * .4)); cono.addColorStop(1, rgb(COL.caliente, alfa));
+      c.save(); c.beginPath(); c.rect(0, 0, W, yh); c.clip();
+      c.beginPath(); c.arc(vx, cy, r, 0, TAU); c.strokeStyle = cono; c.lineWidth = ancho; c.stroke(); c.restore();
+    };
+    trazo(ctx, Math.max(1, H * gr), a * vivo);
+    enGlow(c => trazo(c, H * gr * 5, a * .8 * vivo));
+  });
+}
+
+function pistas(copias, p) {
+  /* Pistas de cobre (apagadas) */
+  for (const [ox, oy] of copias) {
+    for (const t of PLACA.pistas) {
+      for (let i = 1; i < t.pts.length; i++) {
+        const a = t.pts[i - 1], b = t.pts[i];
+        const piezas = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 3));
+        for (let k = 0; k < piezas; k++) {
+          const t0 = k / piezas, t1 = (k + 1) / piezas;
+          const ax = ox + a[0] + (b[0] - a[0]) * t0, ay = oy + a[1] + (b[1] - a[1]) * t0;
+          const bx = ox + a[0] + (b[0] - a[0]) * t1, by = oy + a[1] + (b[1] - a[1]) * t1;
+          const z = prof((ax + bx) / 2, (ay + by) / 2, 0);
+          if (z > LEJOS || z < -2) continue;
+          const s = cinta(ax, ay, bx, by, t.w); if (!s) continue;
+          rellenar(ctx, s, rgb(conNiebla(COL.pista, z)));
+        }
+      }
+    }
+    /* Patas y pads de estaño */
+    for (const d of PLACA.pads) {
+      const x0 = ox + d[0], y0 = oy + d[1], x1 = ox + d[2], y1 = oy + d[3];
+      const z = prof((x0 + x1) / 2, (y0 + y1) / 2, 0);
+      if (z > 40 || z < -1) continue;
+      const s = proyectar([[x0, y0, 0], [x1, y0, 0], [x1, y1, 0], [x0, y1, 0]]); if (!s) continue;
+      rellenar(ctx, s, rgb(conNiebla(d[4], z)));
+    }
+    /* Vías */
+    for (const v of PLACA.vias) {
+      const x = ox + v[0], y = oy + v[1], z = prof(x, y, 0);
+      if (z > 34 || z < -1) continue;
+      const anillo = [], agujero = [];
+      for (let k = 0; k < 8; k++) { const a = k * TAU / 8; anillo.push([x + Math.cos(a) * .24, y + Math.sin(a) * .24, 0]); agujero.push([x + Math.cos(a) * .1, y + Math.sin(a) * .1, 0]); }
+      const s1 = proyectar(anillo); if (!s1) continue;
+      rellenar(ctx, s1, rgb(conNiebla(COL.estano, z)));
+      const s2 = proyectar(agujero); if (s2) rellenar(ctx, s2, rgb(conNiebla([4, 4, 4], z)));
+    }
+  }
+
+  /* Autopista: líneas infinitas a lo largo del vuelo */
+  const y0 = C.y - 6, y1 = C.y + LEJOS;
+  for (const ox of [-ANCHO, 0, ANCHO]) for (const b of PLACA.buses) {
+    const x = ox + b.x;
+    for (let y = Math.floor(y0 / 2) * 2; y < y1; y += 2) {
+      const z = prof(x, y + 1, 0); if (z > LEJOS) continue;
+      const s = cinta(x, y, x, y + 2, b.w, 0, false); if (!s) continue;
+      rellenar(ctx, s, rgb(conNiebla(COL.pista, z)));
+    }
+  }
+
+  /* Pulsos de corriente: cada tramo con un degradado de la cola (apagada) a la cabeza (blanca) */
+  const pantalla = (x, y) => { const z = prof(x, y, 0); if (z < CERCA) return null; return [CX + F * ((x - C.x) * RX + (y - C.y) * RY) / z, CY - F * ((x - C.x) * UX + (y - C.y) * UY - C.z * UZ) / z]; };
+  const pintarPulso = (pts, w, brillo) => {
+    const acum = [0];
+    for (let i = 1; i < pts.length; i++) acum.push(acum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+    const total = acum[acum.length - 1] || 1;
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i], fa = acum[i - 1] / total, fb = acum[i] / total;
+      const z = prof((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, 0); if (z > LEJOS) continue;
+      const luz = brillo * (1 - niebla(z));
+      const s = cinta(a[0], a[1], b[0], b[1], w, 0, false); if (!s) continue;
+      const pa = pantalla(a[0], a[1]), pb = pantalla(b[0], b[1]);
+      const relleno = (c, alfa, blanco) => {
+        if (!pa || !pb) return rgb(ACENTO, alfa * luz * ((fa + fb) / 2) ** 1.6);
+        const gr = c.createLinearGradient(pa[0], pa[1], pb[0], pb[1]);
+        for (let k = 0; k <= 4; k++) {
+          const f = fa + (fb - fa) * k / 4;
+          gr.addColorStop(k / 4, rgb(blanco ? mezcla(ACENTO, COL.caliente, f ** 3) : ACENTO, Math.min(1, alfa * luz * f ** 1.6)));
+        }
+        return gr;
+      };
+      rellenar(ctx, s, relleno(ctx, 1.2, true));
+      const sg = cinta(a[0], a[1], b[0], b[1], w * 2.6, 0, false);
+      if (sg) enGlow(c => rellenar(c, sg, relleno(c, 1, false)));
+    }
+  };
+  for (const [ox, oy] of copias) for (const t of PLACA.pistas) {
+    if (!t.pulso) continue;
+    const u = t.pulso, cab = ((u.fase + u.k * p) % 1) * (t.len + u.largo);
+    const s0 = clamp(cab - u.largo, 0, t.len), s1 = clamp(cab, 0, t.len);
+    if (s1 - s0 < .05) continue;
+    /* Ordenado de la cola a la cabeza; si va al revés, se recorre desde el final */
+    const pts = u.sentido ? tramo(t, s0, s1) : tramo(t, t.len - s1, t.len - s0).reverse();
+    pintarPulso(pts.map(q => [q[0] + ox, q[1] + oy]), t.w * 1.15, 1);
+  }
+  for (const ox of [-ANCHO, 0, ANCHO]) for (const b of PLACA.buses) {
+    if (!b.pulsos) continue;
+    const u = b.pulsos, S = LARGO / u.np;
+    const base = ((u.fase * S + u.D * LARGO * p) % S + S) % S;
+    for (let j = Math.floor((C.y - 8) / S) - 1; j * S < C.y + LEJOS; j++) {
+      const cab = j * S + base;
+      const cola = u.D > 0 ? cab - u.largo : cab + u.largo;
+      pintarPulso([[ox + b.x, cola], [ox + b.x, cab]], b.w * 1.15, .95);
+    }
+  }
+}
+
+/* Barrido de diagnóstico: una línea de luz que recorre la placa una vez por vuelta */
+function barrido(p, cam) {
+  const A = .26, B = .62;
+  if (p < A || p > B) return;
+  const t = suave((p - A) / (B - A));
+  const yb = cam.y + 3 + t * 70, ancho = 3.2;
+  const fuerza = Math.sin(Math.PI * (p - A) / (B - A)) ** .6;
+  const xs = [cam.x - 70, cam.x + 70];
+  /* Estela sobre la placa */
+  for (let k = 0; k < 8; k++) {
+    const ya = yb - ancho * (k + 1) / 8, yb2 = yb - ancho * k / 8;
+    const z = prof(cam.x, ya, 0); if (z > LEJOS) continue;
+    const s = proyectar([[xs[0], ya, 0], [xs[1], ya, 0], [xs[1], yb2, 0], [xs[0], yb2, 0]]); if (!s) continue;
+    rellenar(ctx, s, rgb(ACENTO, .07 * (1 - k / 8) * fuerza * (1 - niebla(z))));
+  }
+  /* Las pistas por las que pasa se encienden */
+  barrido.estado = { yb, ancho, fuerza };
+  const z = prof(cam.x, yb, 0), luz = fuerza * (1 - niebla(z));
+  const s = cinta(xs[0], yb, xs[1], yb, .07); if (s) rellenar(ctx, s, rgb(COL.caliente, luz));
+  const sg = cinta(xs[0], yb, xs[1], yb, .5); if (sg) enGlow(c => rellenar(c, sg, rgb(ACENTO, luz * .9)));
+  const iy0 = Math.floor((yb - ancho - 1) / LARGO), iy1 = Math.floor((yb + 1) / LARGO);
+  for (let iy = iy0; iy <= iy1; iy++) for (const ox of [-ANCHO, 0, ANCHO]) {
+    const oy = iy * LARGO;
+    for (const tr of PLACA.pistas) for (let i = 1; i < tr.pts.length; i++) {
+      let ax = ox + tr.pts[i - 1][0], ay = oy + tr.pts[i - 1][1], bx = ox + tr.pts[i][0], by = oy + tr.pts[i][1];
+      const lo = yb - ancho, hi = yb;
+      if (Math.max(ay, by) < lo || Math.min(ay, by) > hi) continue;
+      if (ay !== by) {                                  // recorta el segmento a la franja iluminada
+        const t0 = clamp((lo - ay) / (by - ay), 0, 1), t1 = clamp((hi - ay) / (by - ay), 0, 1);
+        const ta = Math.min(t0, t1), tb = Math.max(t0, t1);
+        const nax = ax + (bx - ax) * ta, nay = ay + (by - ay) * ta; bx = ax + (bx - ax) * tb; by = ay + (by - ay) * tb; ax = nax; ay = nay;
+      }
+      const cerca = 1 - (yb - (ay + by) / 2) / ancho;
+      const zz = prof((ax + bx) / 2, (ay + by) / 2, 0);
+      const l = fuerza * (1 - niebla(zz)) * clamp(cerca, 0, 1) ** 1.5;
+      const s2 = cinta(ax, ay, bx, by, tr.w); if (s2) rellenar(ctx, s2, rgb(ACENTO, l));
+      const s3 = cinta(ax, ay, bx, by, tr.w * 3); if (s3) enGlow(c => rellenar(c, s3, rgb(ACENTO, l * .6)));
+    }
+    for (const b of PLACA.buses) {
+      const x = ox + b.x, lo = yb - ancho;
+      for (let k = 0; k < 6; k++) {
+        const ya = lo + ancho * k / 6, yb2 = lo + ancho * (k + 1) / 6, l = fuerza * (1 - niebla(prof(x, ya, 0))) * ((k + 1) / 6) ** 1.5;
+        const s2 = cinta(x, ya, x, yb2, b.w, 0, false); if (s2) rellenar(ctx, s2, rgb(ACENTO, l));
+      }
+    }
+  }
+}
+barrido.estado = null;
+
+/* ---------- Componentes (con su volumen) ---------- */
+const LUZ = norm3([-.35, -.55, .76]);
+function norm3(v) { const l = Math.hypot(v[0], v[1], v[2]); return [v[0] / l, v[1] / l, v[2] / l]; }
+const sombreado = (c, n) => por(c, .32 + .78 * Math.max(0, n[0] * LUZ[0] + n[1] * LUZ[1] + n[2] * LUZ[2]));
+
+function solidos(copias, p) {
+  const lista = [];
+  for (const [ox, oy] of copias) for (const s of PLACA.solidos) {
+    const cx = ox + s.cx, cy = oy + s.cy;
+    const z = prof(cx, cy, s.z1 / 2);
+    if (z > LEJOS + 4 || z < -6) continue;
+    if (s.partes[0].smd && z > 30) continue;            // los diminutos, solo de cerca
+    lista.push({ s, ox, oy, d: Math.hypot(cx - C.x, cy - C.y, s.z1 / 2 - C.z) });
+  }
+  lista.sort((a, b) => b.d - a.d);                       // de lejos a cerca
+  const est = (p >= .26 && p <= .62) ? barrido.estado : null;
+  for (const { s, ox, oy } of lista) {
+    let partes = s.partes;
+    if (s.dimm !== undefined) {                         // módulo de RAM: primero la cara que no se ve
+      const lado = C.x < ox + s.dimm ? 1 : -1;
+      partes = partes.slice().sort((a, b) => orden(a, lado) - orden(b, lado));
+    } else if (s.aletas) {
+      partes = [partes[0]].concat(partes.slice(1).sort((a, b) => Math.abs(C.x - (ox + b.x0)) - Math.abs(C.x - (ox + a.x0))));
+    }
+    for (const q of partes) q.t === 'cil' ? cilindro(q, ox, oy, est) : cajaSolida(q, ox, oy, est);
+  }
+}
+function orden(q, lado) { if (q.z1 <= .9 && q.z0 === 0) return 0; if (q.cara === lado) return 1; if (q.cara === -lado) return 3; return 2; }
+
+function cajaSolida(q, ox, oy, est) {
+  const x0 = ox + q.x0, x1 = ox + q.x1, y0 = oy + q.y0, y1 = oy + q.y1, z0 = q.z0, z1 = q.z1;
+  const z = prof((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+  const f = niebla(z);
+  const caras = [];
+  if (C.x < x0) caras.push([[x0, y0, z0], [x0, y1, z0], [x0, y1, z1], [x0, y0, z1], [-1, 0, 0]]);
+  if (C.x > x1) caras.push([[x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [x1, y0, z1], [1, 0, 0]]);
+  if (C.y < y0) caras.push([[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1], [0, -1, 0]]);
+  if (C.y > y1) caras.push([[x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1], [0, 1, 0]]);
+  for (const c of caras) {
+    const s = proyectar(c.slice(0, 4)); if (!s) continue;
+    rellenar(ctx, s, rgb(mezcla(sombreado(q.col, c[4]), COL.bruma, f)));
+    enGlow(cc => rellenar(cc, s, '#000'));
+  }
+  const top = proyectar([[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]]); if (!top) return;
+  rellenar(ctx, top, rgb(mezcla(sombreado(q.col, [0, 0, 1]), COL.bruma, f)));
+  enGlow(cc => rellenar(cc, top, '#000'));
+  if (z < 30 && !q.smd && !q.pin) {                     // perfil fino para que se lea la forma
+    camino(ctx, top); ctx.strokeStyle = rgb(mezcla(COL.borde, COL.bruma, f), .5); ctx.lineWidth = Math.max(.6, F * .012 / z); ctx.stroke();
+  }
+  /* Marcas serigrafiadas */
+  if (q.marca && z < 26) {
+    const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, r = Math.min(x1 - x0, y1 - y0);
+    if (q.marca === 'punto') {
+      const pts = []; for (let k = 0; k < 8; k++) { const a = k * TAU / 8; pts.push([x0 + r * .18 + Math.cos(a) * r * .06, y0 + r * .18 + Math.sin(a) * r * .06, z1]); }
+      const s = proyectar(pts); if (s) rellenar(ctx, s, rgb(mezcla([70, 66, 62], COL.bruma, f)));
+    } else if (q.marca === 'aro') {
+      const pts = []; for (let k = 0; k < 16; k++) { const a = k * TAU / 16; pts.push([mx + Math.cos(a) * r * .32, my + Math.sin(a) * r * .32, z1]); }
+      const s = proyectar(pts); if (s) { camino(ctx, s); ctx.strokeStyle = rgb(mezcla([58, 55, 52], COL.bruma, f)); ctx.lineWidth = Math.max(.6, F * .03 / z); ctx.stroke(); }
+    } else if (q.marca === 'texto') {
+      for (let k = 0; k < 3; k++) {
+        const ly = y0 + (y1 - y0) * (.3 + k * .14), lx1 = x0 + (x1 - x0) * (k === 2 ? .45 : .7);
+        const s = cinta(x0 + (x1 - x0) * .25, ly, lx1, ly, (y1 - y0) * .05, z1 + .001); if (s) rellenar(ctx, s, rgb(mezcla([78, 74, 68], COL.bruma, f), .8));
+      }
+    }
+  }
+  /* Luz de contorno: el borde del fondo recoge el brillo del horizonte */
+  if (q.rim || q.z1 > 1.2) {
+    const s = cinta(x0, y1, x1, y1, .06, z1, false);
+    if (s) {
+      const l = (1 - f) * .55;
+      rellenar(ctx, s, rgb(ACENTO, l));
+      enGlow(cc => rellenar(cc, s, rgb(ACENTO, l * .7)));
+    }
+  }
+  /* El barrido de diagnóstico enciende el borde de lo que toca */
+  if (est && y1 > est.yb - est.ancho && y0 < est.yb) {
+    const l = est.fuerza * (1 - f) * .9;
+    camino(ctx, top); ctx.strokeStyle = rgb(ACENTO, l); ctx.lineWidth = Math.max(1, F * .03 / z); ctx.stroke();
+    enGlow(cc => { camino(cc, top); cc.strokeStyle = rgb(ACENTO, l * .8); cc.lineWidth = Math.max(2, F * .08 / z); cc.stroke(); });
+  }
+}
+
+function cilindro(q, ox, oy, est) {
+  const x = ox + q.x, y = oy + q.y, N = 18;
+  const z = prof(x, y, q.z1 / 2), f = niebla(z);
+  const dxc = C.x - x, dyc = C.y - y, dl = Math.hypot(dxc, dyc) || 1;
+  for (let k = 0; k < N; k++) {
+    const a0 = k * TAU / N, a1 = (k + 1) * TAU / N, am = (a0 + a1) / 2;
+    const n = [Math.cos(am), Math.sin(am), 0];
+    const mira = (n[0] * dxc + n[1] * dyc) / dl;
+    if (mira <= 0) continue;
+    const pts = [[x + Math.cos(a0) * q.r, y + Math.sin(a0) * q.r, q.z0], [x + Math.cos(a1) * q.r, y + Math.sin(a1) * q.r, q.z0], [x + Math.cos(a1) * q.r, y + Math.sin(a1) * q.r, q.z1], [x + Math.cos(a0) * q.r, y + Math.sin(a0) * q.r, q.z1]];
+    const s = proyectar(pts); if (!s) continue;
+    let c = sombreado(q.col, n);
+    if (k === 13 || k === 14) c = mezcla(c, [120, 116, 110], .35);   // franja de polaridad
+    const rim = (1 - mira) ** 5 * Math.max(0, n[1] * .6 + .5);
+    c = mezcla(c, ACENTO, rim * .55);
+    rellenar(ctx, s, rgb(mezcla(c, COL.bruma, f)));
+    enGlow(cc => rellenar(cc, s, rim > .15 ? rgb(ACENTO, rim * .35 * (1 - f)) : '#000'));
+  }
+  const tapa = []; for (let k = 0; k < N; k++) { const a = k * TAU / N; tapa.push([x + Math.cos(a) * q.r, y + Math.sin(a) * q.r, q.z1]); }
+  const s = proyectar(tapa); if (!s) return;
+  rellenar(ctx, s, rgb(mezcla(sombreado([86, 84, 80], [0, 0, 1]), COL.bruma, f)));
+  enGlow(cc => rellenar(cc, s, '#000'));
+  if (z < 28) {                                          // la cruz de la válvula
+    for (const a of [rad(45), rad(135)]) {
+      const s2 = cinta(x - Math.cos(a) * q.r * .7, y - Math.sin(a) * q.r * .7, x + Math.cos(a) * q.r * .7, y + Math.sin(a) * q.r * .7, q.r * .09, q.z1 + .001, false);
+      if (s2) rellenar(ctx, s2, rgb(mezcla([40, 38, 36], COL.bruma, f)));
+    }
+  }
+  /* Borde del fondo de la tapa con luz de contorno */
+  const arco = []; for (let k = 0; k <= 10; k++) { const a = rad(20 + k * 14); arco.push([x + Math.cos(a) * q.r, y + Math.sin(a) * q.r, q.z1]); }
+  const l = (1 - f) * .6;
+  for (let k = 1; k < arco.length; k++) {
+    const sa = cinta(arco[k - 1][0], arco[k - 1][1], arco[k][0], arco[k][1], .07, q.z1, false);
+    if (sa) { rellenar(ctx, sa, rgb(ACENTO, l)); enGlow(cc => rellenar(cc, sa, rgb(ACENTO, l * .6))); }
+  }
+  if (est && y + q.r > est.yb - est.ancho && y - q.r < est.yb) {
+    const lb = est.fuerza * (1 - f) * .9;
+    camino(ctx, s); ctx.strokeStyle = rgb(ACENTO, lb); ctx.lineWidth = Math.max(1, F * .03 / z); ctx.stroke();
+    enGlow(cc => { camino(cc, s); cc.strokeStyle = rgb(ACENTO, lb * .8); cc.lineWidth = Math.max(2, F * .08 / z); cc.stroke(); });
+  }
+}
+
+/* LEDs de estado que parpadean */
+function leds(copias, p) {
+  for (const [ox, oy] of copias) for (const L of PLACA.leds) {
+    const x = ox + L.x, y = oy + L.y, z = prof(x, y, .2);
+    if (z > LEJOS || z < CERCA) continue;
+    const on = L.fijo ? .75 + .25 * Math.sin(TAU * (3 * p + L.fase)) : clamp(Math.sin(TAU * (L.k * p + L.fase)) * 3 - 1, 0, 1);
+    const s = proyectar([[x - .25, y - .15, .22], [x + .25, y - .15, .22], [x + .25, y + .15, .22], [x - .25, y + .15, .22]]); if (!s) continue;
+    rellenar(ctx, s, rgb(mezcla(mezcla([30, 30, 32], COL.caliente, on), COL.bruma, niebla(z))));
+    if (on > .02) {
+      const sx = CX + F * ((x - C.x) * RX + (y - C.y) * RY) / z, sy = CY - F * ((x - C.x) * UX + (y - C.y) * UY + (.22 - C.z) * UZ) / z;
+      const r = Math.max(3, F * .9 / z);
+      enGlow(c => {
+        const gr = c.createRadialGradient(sx, sy, 0, sx, sy, r);
+        gr.addColorStop(0, rgb(COL.caliente, on * (1 - niebla(z)))); gr.addColorStop(.25, rgb(ACENTO, on * .55 * (1 - niebla(z)))); gr.addColorStop(1, rgb(ACENTO, 0));
+        c.fillStyle = gr; c.fillRect(sx - r, sy - r, 2 * r, 2 * r);
+      });
+    }
+  }
+}
+
+/* Polvo en el aire, desenfocado cuando está muy cerca (como en un macro) */
+function motas(copias, p) {
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const FOCO = 13, APERTURA = .1;
+  for (const [ox, oy] of copias) for (const m of PLACA.motas) {
+    const x = ox + m.x + m.amp * Math.sin(TAU * (m.kx * p + m.f1));
+    const y = oy + m.y;
+    const zz = m.z + m.amp * .6 * Math.sin(TAU * (m.kz * p + m.f2));
+    const dx = x - C.x, dy = y - C.y, dz = zz - C.z;
+    const z = dx * FX + dy * FY + dz * FZ;
+    if (z < .5 || z > 40) continue;
+    const sx = CX + F * (dx * RX + dy * RY) / z, sy = CY - F * (dx * UX + dy * UY + dz * UZ) / z;
+    const rp = Math.max(.6, m.r * F / z), blur = APERTURA * F * Math.abs(1 / z - 1 / FOCO);
+    const r = Math.min(H * .07, rp + blur);
+    if (sx < -r || sx > W + r || sy < -r || sy > H + r) continue;
+    const a = m.luz * (1 - niebla(z)) * clamp(((rp + .8) / (r + .8)) ** 2, .05, 1);
+    const col = m.blanca ? COL.caliente : ACENTO;
+    const gr = ctx.createRadialGradient(sx, sy, 0, sx, sy, r);
+    gr.addColorStop(0, rgb(col, a * .9)); gr.addColorStop(blur > 3 ? .7 : .35, rgb(col, a * .45)); gr.addColorStop(1, rgb(col, 0));
+    ctx.fillStyle = gr; ctx.fillRect(sx - r, sy - r, 2 * r, 2 * r);
+  }
+  ctx.restore();
+}
+
+/* Brillo, bruma del punto de fuga y viñeta */
+function postproceso(cam) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.imageSmoothingQuality = 'high';
+  ctx.filter = `blur(${(H * .004).toFixed(1)}px)`; ctx.drawImage(gcv, 0, 0, W, H);
+  ctx.filter = `blur(${(H * .016).toFixed(1)}px)`; ctx.globalAlpha = .8; ctx.drawImage(gcv, 0, 0, W, H);
+  ctx.filter = `blur(${(H * .045).toFixed(1)}px)`; ctx.globalAlpha = .7; ctx.drawImage(gcv, 0, 0, W, H);
+  ctx.filter = 'none'; ctx.globalAlpha = 1;
+  /* Resplandor donde la autopista se pierde en el horizonte */
+  const yh = CY - F * Math.tan(cam.pitch), vx = CX - F * Math.tan(cam.yaw) / Math.cos(cam.pitch);
+  const r = Math.max(W, H) * .55;
+  const gr = ctx.createRadialGradient(vx, yh, 0, vx, yh, r);
+  gr.addColorStop(0, rgb(ACENTO, .20)); gr.addColorStop(.12, rgb(ACENTO, .08)); gr.addColorStop(.5, rgb(ACENTO, .02)); gr.addColorStop(1, rgb(ACENTO, 0));
+  ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H);
+  ctx.save(); ctx.translate(vx, yh); ctx.scale(1, .06);   // destello alargado, muy suave
+  const gl = ctx.createRadialGradient(0, 0, 0, 0, 0, W * .5);
+  gl.addColorStop(0, rgb(COL.caliente, .10)); gl.addColorStop(1, rgb(ACENTO, 0));
+  ctx.fillStyle = gl; ctx.fillRect(-W * .5, -W * .5, W, W);
+  ctx.restore();
+  ctx.restore();
+  /* Viñeta */
+  const v = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * .35, W / 2, H / 2, Math.hypot(W, H) * .6);
+  v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.6)');
+  ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
+}
+
+/* =========================================================
+   7. Arranque
+   ========================================================= */
+window.ESCENA = {
+  segundos: SEGUNDOS,
+  /* Dibuja el instante p (0 a 1) y devuelve el fotograma en PNG */
+  fotograma(p) { dibujar(p); return cv.toDataURL('image/png'); },
+  dibujar
+};
+
+if (RENDER) {
+  tamano(+Q.get('w') || (VERTICAL ? 1080 : 1920), +Q.get('h') || (VERTICAL ? 1920 : 1080));
+} else {
+  /* Vista previa en directo, a la resolución de la ventana (más baja si va justo) */
+  const ajustar = () => { const k = Math.min(1, 1600 / innerWidth); tamano(innerWidth * k, innerHeight * k); };
+  addEventListener('resize', ajustar); ajustar();
+  const t0 = performance.now();
+  const bucle = (t) => { dibujar(((t - t0) / 1000 / SEGUNDOS) % 1); requestAnimationFrame(bucle); };
+  requestAnimationFrame(bucle);
+}
+</script>
+</body>
+</html>

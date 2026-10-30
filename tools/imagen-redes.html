@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Imagen para redes (og-image)</title>
+<!--
+  IMAGEN QUE SALE AL COMPARTIR LA WEB (WhatsApp, redes): 1200 x 630
+  Para volver a hacerla: ábrela en Chrome, F12 → icono de móvil → "Responsive"
+  con 1200 x 630 → menú ⋮ → "Capture screenshot" y guárdala como
+  assets/img/og-ordenadores.png (nombre nuevo cada vez que cambie:
+  Cloudflare guarda las imágenes una semana). El fondo es el primer fotograma del vídeo de la portada.
+-->
+<link rel="stylesheet" href="../static/css/fonts.css">
+<link rel="stylesheet" href="../static/css/tokens.css">
+<style>
+html,body{margin:0;background:#000}
+.og{position:relative;width:1200px;height:630px;overflow:hidden;font-family:var(--f-sans);color:var(--ink);background:#000 url("../static/assets/video/taller-poster.webp") 70% 30%/cover no-repeat}
+.og::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,#000 0%,rgba(0,0,0,.9) 34%,rgba(0,0,0,.2) 72%,rgba(0,0,0,0) 100%)}
+.in{position:relative;z-index:1;padding:70px 72px;display:grid;gap:24px;justify-items:start}
+.brand{display:flex;align-items:center;gap:14px;font-weight:650;font-size:34px;letter-spacing:-.03em}
+.brand i{width:34px;height:3px;border-radius:2px;background:currentColor}
+.eyebrow{font-size:15px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:var(--muted);margin-top:18px}
+h1{margin:0;font-size:96px;line-height:.98;font-weight:650;letter-spacing:-.045em}
+h1 span{display:block}
+.silver{background:var(--silver);-webkit-background-clip:text;background-clip:text;color:transparent}
+.cta{margin-top:10px;background:#fff;color:#000;font-weight:600;font-size:26px;padding:16px 30px;border-radius:999px}
+</style>
+</head>
+<body>
+<div class="og">
+  <div class="in">
+    <div class="brand"><i></i>Alextoll</div>
+    <p class="eyebrow">Reparación y optimización de ordenadores · Madrid</p>
+    <h1><span>Tu ordenador,</span><span class="silver">como nuevo.</span></h1>
+    <div class="cta">Pedir diagnóstico · alextoll.store</div>
+  </div>
+</div>
+</body>
+</html>

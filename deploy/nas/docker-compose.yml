@@ -1,0 +1,63 @@
+# =========================================================
+# Alextoll en el NAS UGREEN (Docker) · /volume2/docker/webs/alextoll
+# ---------------------------------------------------------
+#  web           nginx con la web (carpeta ./web)
+#  estadisticas  contador de visitas (servidor/api.mjs, datos en ./datos)
+#  tunel         Cloudflare Tunnel: publica la web en https://alextoll.store
+#                sin abrir puertos en el router
+# Las claves van en el archivo .env (STATS_KEY y TUNNEL_TOKEN), que no se sube a git.
+# Guía: deploy/SUBIR-AL-NAS.md
+# =========================================================
+name: alextoll
+
+services:
+  web:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    # Como el usuario del NAS: los permisos de UGOS (ugacl) no dejan leer la web
+    # al usuario "nginx" del contenedor. Lo que nginx escribe va a memoria (tmpfs).
+    user: "1000:10"
+    tmpfs:
+      - /var/cache/nginx:mode=1777
+      - /run:mode=1777
+    volumes:
+      - ./web:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "8090:80"          # solo para probar en casa: http://192.168.1.25:8090
+    depends_on:
+      - estadisticas
+
+  estadisticas:
+    image: node:22-alpine
+    restart: unless-stopped
+    user: "1000:10"        # el usuario del NAS, así los datos son tuyos y no de root
+    working_dir: /app
+    command: ["node", "api.mjs"]
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3001
+      DATA_DIR: /datos
+      STATS_KEY: ${STATS_KEY}
+      # n8n (deploy/n8n) recibe los avisos de formulario/reseña y los manda a Telegram
+      N8N_AVISOS: http://n8n:5678/webhook/aviso-web
+      # n8n (flujo 10) manda por correo los presupuestos de reparacion-moviles.html, con las fotos
+      N8N_PRESUPUESTOS: http://n8n:5678/webhook/presupuesto-movil
+      # n8n (flujo 11) manda por correo los mensajes del formulario de contacto.
+      # Mientras no esté importado, la web usa Web3Forms como plan B.
+      N8N_CONTACTO: http://n8n:5678/webhook/contacto
+    volumes:
+      - ./servidor:/app:ro
+      - ./datos:/datos
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+
+  tunel:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
+    depends_on:
+      - web

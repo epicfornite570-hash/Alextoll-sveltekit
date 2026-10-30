@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Escena del vídeo de la portada</title>
+<!--
+  ESCENA DEL VÍDEO DE LA PORTADA (index.html)
+  Vuelo lento y continuo sobre un mar de seda plateada (el diseño)
+  por el que corren pulsos de luz (la tecnología). Al fondo, montañas
+  con el borde iluminado y el resplandor del horizonte a la derecha.
+  La izquierda queda oscura: ahí va el texto de la cabecera.
+
+  - Ábrela con doble clic para verla en directo (se repite sola).
+  - node tools/video/generar-video.cjs portal   saca los vídeos
+    assets/video/portal{,-vertical}.{mp4,webm} y sus pósters.
+
+  Parámetros de la dirección (los pone el generador):
+    ?v=horizontal | vertical     encuadre (ordenador o móvil)
+    &w=1920&h=1080               tamaño en píxeles
+    &accent=DCE2EA               color de la luz (sale de css/tokens.css)
+    &render                      modo fotograma a fotograma (sin animación)
+
+  Todo depende solo del instante p (de 0 a 1): el fotograma 0 y el
+  último encajan, así que el vídeo se repite sin saltos.
+-->
+<style>
+html,body{margin:0;height:100%;background:#000;overflow:hidden}
+canvas{display:block;width:100%;height:100%;object-fit:cover}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+'use strict';
+
+/* =========================================================
+   1. Parámetros (retócalos aquí)
+   ========================================================= */
+const Q = new URLSearchParams(location.search);
+const RENDER = Q.has('render');
+const VERTICAL = Q.get('v') === 'vertical';
+const SEGUNDOS = 12;                       // duración de una vuelta (el generador usa la misma)
+const TAU = Math.PI * 2;
+
+const hex = (h) => { h = String(h || '').replace('#', ''); return h.length === 6 ? [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)) : null; };
+const ACENTO = hex(Q.get('accent')) || [220, 226, 234];  // plata
+const BLANCO = [255, 255, 255];
+const mezcla = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+const rgb = (c, a = 1) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+const suave = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+
+/* Encuadre: horizonte (alto), sol (ancho), campo de visión y zona del texto */
+const ENC = VERTICAL
+  ? { horizonte: .55, sol: .66, fov: 50, camY: 1.05, ancho: 11, puntos: 150, texto: 'arriba' }
+  : { horizonte: .5,  sol: .74, fov: 70, camY: 1.0,  ancho: 18, puntos: 230, texto: 'izquierda' };
+
+/* El mar de seda: filas de líneas que se acercan a la cámara */
+const DZ = .14;                            // separación entre líneas
+const FILAS = 180;                         // filas que se recorren en una vuelta
+const VUELTA = DZ * FILAS;                 // distancia de una vuelta (la altura se repite con este periodo)
+const ZMIN = .55, ZMAX = 30;
+
+/* =========================================================
+   2. Lienzos
+   ========================================================= */
+let W, H, F, HY, SX, ESC;
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+const gcv = document.createElement('canvas');           // capa de brillo (a media resolución)
+const g = gcv.getContext('2d');
+const pcv = document.createElement('canvas');           // copia pequeña para el brillo ancho (desenfocar en grande es lento)
+const pg = pcv.getContext('2d');
+
+function tamano(w, h) {
+  W = cv.width = Math.round(w); H = cv.height = Math.round(h);
+  gcv.width = Math.round(W / 2); gcv.height = Math.round(H / 2);
+  pcv.width = Math.round(W / 8); pcv.height = Math.round(H / 8);
+  F = (W / 2) / Math.tan(ENC.fov * Math.PI / 360);
+  HY = H * ENC.horizonte;
+  SX = W * ENC.sol;
+  ESC = Math.min(W, H) / 1080;
+}
+
+function aleatorio(seed) {                               // mulberry32: mismo resultado siempre
+  return function () {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+/* =========================================================
+   3. El terreno de seda
+   ========================================================= */
+/* Altura en (x, z del mundo, instante). Las frecuencias en z son múltiplos de
+   la vuelta y las del tiempo, enteras: así el último fotograma encaja con el primero. */
+function altura(x, zw, p) {
+  const k = TAU / VUELTA;
+  return .30 * Math.sin(x * .38 + zw * k * 3 + TAU * p)
+       + .20 * Math.sin(x * .83 - zw * k * 5 + 1.3 - TAU * p * 2)
+       + .11 * Math.sin(x * 1.6 + zw * k * 9 + 2.1 + TAU * p * 3)
+       + .06 * Math.sin(-x * 2.7 + zw * k * 14 + .7 + TAU * p * 2);
+}
+
+/* La luz viene del horizonte, a la derecha: dirección fija (está en el infinito) */
+function luz() {
+  const x = (SX - W / 2) / F, y = .06, l = Math.hypot(x, y, 1);
+  return [x / l, y / l, 1 / l];
+}
+
+/* Brillo de un punto: un velo plateado tenue en todas las líneas
+   más el reflejo de la luz (ancho y suave + destellos finos) */
+function brillo(x, zw, z, p, cam, L) {
+  const e = .03;
+  const h = altura(x, zw, p);
+  const hx = (altura(x + e, zw, p) - altura(x - e, zw, p)) / (2 * e);
+  const hz = (altura(x, zw + e, p) - altura(x, zw - e, p)) / (2 * e);
+  let nx = -hx, ny = 1, nz = -hz; const nl = Math.hypot(nx, ny, nz); nx /= nl; ny /= nl; nz /= nl;
+  let vx = cam.x - x, vy = cam.y - h, vz = -z; const vl = Math.hypot(vx, vy, vz); vx /= vl; vy /= vl; vz /= vl;
+  let mx = L[0] + vx, my = L[1] + vy, mz = L[2] + vz; const ml = Math.hypot(mx, my, mz); mx /= ml; my /= ml; mz /= ml;
+  return { h, d: Math.max(0, nx * mx + ny * my + nz * mz) };
+}
+
+/* Brillo final de un punto ya en pantalla: velo plateado + el río de luz que
+   baja desde el sol hacia la cámara (se ensancha al acercarse) + destellos en las crestas */
+function luzEn(sx, z, d) {
+  const rio = Math.exp(-Math.pow((sx - SX) / (W * (.06 + .28 * Math.min(1, 2.5 / z))), 2));
+  const brillo = suave(.4, .95, d), destello = Math.pow(suave(.72, 1, d), 3);
+  return .1 + .18 * rio + .7 * rio * brillo + 1.15 * destello * (.35 + .65 * rio);
+}
+
+/* Niebla: las líneas aparecen suaves cerca de la cámara y se pierden en el horizonte */
+const niebla = (z) => suave(ZMIN, 1.6, z) * Math.pow(1 - z / ZMAX, 1.35);
+
+/* La zona del texto queda más apagada */
+function zonaTexto(sx, sy) {
+  if (ENC.texto === 'izquierda') return .32 + .68 * suave(W * .16, W * .62, sx);
+  return .55 + .45 * suave(H * .3, H * .62, sy);
+}
+
+/* Pulsos de luz que viajan por algunas líneas */
+const PULSOS = (() => {
+  const r = aleatorio(7), lista = [];
+  for (let i = 0; i < 44; i++) {
+    lista.push({
+      fila: Math.floor(r() * FILAS),
+      x0: r(),
+      vueltas: (r() < .5 ? -1 : 1) * (1 + Math.floor(r() * 2)),   // vueltas enteras: encaja en el bucle
+      largo: 2.2 + r() * 3.2,
+      fuerza: 1 + r() * .8
+    });
+  }
+  return lista;
+})();
+
+/* Motas de polvo flotando en la luz */
+const MOTAS = (() => {
+  const r = aleatorio(21), lista = [];
+  for (let i = 0; i < 70; i++) lista.push({ x: r(), y: r(), dx: (r() < .5 ? -1 : 1), dy: r() * .04, fase: r(), t: .6 + r() * 1.6 });
+  return lista;
+})();
+
+/* =========================================================
+   4. Dibujo
+   ========================================================= */
+function proyectar(x, y, z, cam) {
+  return [W / 2 + F * (x - cam.x) / z, HY + F * (cam.y - y) / z];
+}
+
+function dibujar(p) {
+  const cam = { x: .55 * Math.sin(TAU * p), y: ENC.camY + .04 * Math.sin(TAU * p * 2 + 1), z: p * VUELTA };
+  const L = luz();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.clearRect(0, 0, gcv.width, gcv.height);
+
+  cielo(p);
+  montanas(p);
+  bruma(p);
+  terreno(p, cam, L);
+  nieblaHorizonte(p);
+  motas(p);
+  postproceso();
+}
+
+/* Cielo negro con el resplandor del horizonte */
+function cielo(p) {
+  const gr = ctx.createLinearGradient(0, 0, 0, HY);
+  gr.addColorStop(0, '#000'); gr.addColorStop(1, rgb(mezcla([0, 0, 0], ACENTO, .07)));
+  ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H);
+  const r = Math.max(W, H) * .62;
+  const rad = ctx.createRadialGradient(SX, HY, 0, SX, HY, r);
+  const pulso = 1 + .06 * Math.sin(TAU * p);
+  rad.addColorStop(0, rgb(ACENTO, .34 * pulso)); rad.addColorStop(.12, rgb(ACENTO, .14));
+  rad.addColorStop(.45, rgb(ACENTO, .035)); rad.addColorStop(1, rgb(ACENTO, 0));
+  ctx.fillStyle = rad; ctx.fillRect(0, 0, W, H);
+}
+
+/* Cordilleras al fondo: más altas hacia la derecha, con el borde encendido cerca de la luz */
+function montanas(p) {
+  const capas = VERTICAL
+    ? [{ alto: .2, semilla: 5, luz: .3, bruma: .16 }, { alto: .14, semilla: 3, luz: .65, bruma: .09 }, { alto: .08, semilla: 9, luz: 1, bruma: .035 }]
+    : [{ alto: .34, semilla: 5, luz: .3, bruma: .16 }, { alto: .25, semilla: 3, luz: .65, bruma: .09 }, { alto: .15, semilla: 9, luz: 1, bruma: .035 }];
+  capas.forEach((c, n) => {
+    const r = aleatorio(c.semilla), a = r() * 6, b = r() * 6, d = r() * 6;
+    const paso = Math.max(2, W / 400), pts = [];
+    for (let sx = -paso; sx <= W + paso; sx += paso) {
+      const u = sx / W, f = VERTICAL ? 1 : 1.8;                // en horizontal, más picos a lo ancho
+      const cresta = (f, k) => Math.pow(1 - Math.abs(Math.sin(f)), k);
+      const pico = .62 * cresta(u * f * 2.6 + a, 1.3) + .28 * cresta(u * f * 6.3 + b, 1.7) + .1 * cresta(u * f * 15 + d, 2.2);
+      const lado = VERTICAL ? .35 + .65 * suave(-.1, 1.1, u) : .12 + .88 * suave(.28, 1, u);
+      pts.push([sx, HY - H * c.alto * pico * lado]);
+    }
+    /* Relleno: oscuro, con un poco de bruma en la capa del fondo. Baja por debajo del
+       horizonte hasta tocar el mar (que se dibuja encima): así no queda una franja de luz recta */
+    const base = HY + H * .09;
+    ctx.beginPath(); ctx.moveTo(pts[0][0], base);
+    pts.forEach(q => ctx.lineTo(q[0], q[1]));
+    ctx.lineTo(W + paso, base); ctx.closePath();
+    const relleno = ctx.createLinearGradient(0, HY - H * c.alto, 0, base);
+    relleno.addColorStop(0, rgb(mezcla([3, 3, 4], ACENTO, c.bruma + .05)));
+    relleno.addColorStop(.35, rgb(mezcla([3, 3, 4], ACENTO, c.bruma)));
+    relleno.addColorStop(1, rgb(mezcla([3, 3, 4], ACENTO, c.bruma * .6 + .05)));
+    ctx.fillStyle = relleno; ctx.fill();
+    /* Borde encendido: más fuerte cuanto más cerca de la luz */
+    for (let i = 1; i < pts.length; i++) {
+      const [x0, y0] = pts[i - 1], [x1, y1] = pts[i];
+      const cerca = Math.exp(-Math.pow((x1 - SX) / (W * (VERTICAL ? .4 : .26)), 2));
+      const sube = Math.max(0, (y0 - y1) / paso);          // las laderas que miran a la luz brillan más
+      const k = c.luz * (.05 + .95 * cerca) * (.35 + Math.min(1, sube * 1.5) * .65) * (1 + .05 * Math.sin(TAU * p + i * .01));
+      if (k < .02) continue;
+      ctx.strokeStyle = rgb(mezcla(ACENTO, BLANCO, .5), Math.min(1, k)); ctx.lineWidth = 1.6 * ESC;
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+      if (k > .25) { g.strokeStyle = rgb(ACENTO, Math.min(1, (k - .25) * 1.1)); g.lineWidth = 2.5 * ESC; g.beginPath(); g.moveTo(x0 / 2, y0 / 2); g.lineTo(x1 / 2, y1 / 2); g.stroke(); }
+    }
+  });
+}
+
+/* Bruma que se desliza por el horizonte */
+function bruma(p) {
+  for (let i = 0; i < 3; i++) {
+    const x = W * (.5 + .45 * Math.sin(TAU * p + i * 2.1)), y = HY - H * (.005 + .02 * i);
+    ctx.save(); ctx.translate(x, y); ctx.scale(1, .08);
+    const rad = ctx.createRadialGradient(0, 0, 0, 0, 0, W * .45);
+    rad.addColorStop(0, rgb(ACENTO, .05)); rad.addColorStop(1, rgb(ACENTO, 0));
+    ctx.fillStyle = rad; ctx.fillRect(-W * .45, -W * .45, W * .9, W * .9);
+    ctx.restore();
+  }
+}
+
+/* Las filas de seda, de la más lejana a la más cercana: cada una tapa lo que tiene detrás */
+function terreno(p, cam, L) {
+  const k0 = Math.floor(cam.z / DZ);
+  const j1 = Math.ceil(ZMAX / DZ) + 1;
+  const n = ENC.puntos, x0 = cam.x - ENC.ancho, x1 = cam.x + ENC.ancho;
+  const sx = new Float32Array(n), sy = new Float32Array(n), br = new Float32Array(n);
+  const lejos = mezcla([1, 1, 2], ACENTO, .1);              // las filas lejanas tapan con bruma, no con negro
+
+  for (let j = j1; j >= 1; j--) {
+    const fila = k0 + j, zw = fila * DZ, z = zw - cam.z;
+    if (z < ZMIN || z > ZMAX) continue;
+    const nb = niebla(z);
+    const ancho = z * (W / 2) / F * 1.08 + 1.2 + Math.abs(cam.x);       // justo lo que se ve a esa distancia
+    for (let i = 0; i < n; i++) {
+      const x = cam.x - ancho + (2 * ancho) * i / (n - 1);
+      const b = brillo(x, zw, z, p, cam, L);
+      const q = proyectar(x, b.h, z, cam);
+      sx[i] = q[0]; sy[i] = q[1];
+      br[i] = luzEn(q[0], z, b.d) * nb * zonaTexto(q[0], q[1]);
+    }
+    /* Tapa lo de detrás (en el lienzo y en la capa de brillo) */
+    ctx.beginPath(); ctx.moveTo(sx[0], H + 10);
+    for (let i = 0; i < n; i++) ctx.lineTo(sx[i], sy[i]);
+    ctx.lineTo(sx[n - 1], H + 10); ctx.closePath();
+    ctx.fillStyle = rgb(mezcla([1, 1, 2], lejos, suave(ZMAX * .4, ZMAX, z))); ctx.fill();
+    g.beginPath(); g.moveTo(sx[0] / 2, H / 2 + 5);
+    for (let i = 0; i < n; i++) g.lineTo(sx[i] / 2, sy[i] / 2);
+    g.lineTo(sx[n - 1] / 2, H / 2 + 5); g.closePath();
+    g.fillStyle = '#000'; g.fill();
+
+    /* La línea, a tramos con su brillo */
+    const grosor = Math.max(.7, Math.min(2.4, 2.2 / Math.sqrt(z))) * ESC;
+    ctx.lineWidth = grosor; g.lineWidth = grosor * 1.6 / 2 + .4;
+    for (let i = 1; i < n; i += 2) {
+      const a = Math.min(1, (br[i - 1] + br[i] + br[Math.min(n - 1, i + 1)]) / 3);
+      if (a < .012) continue;
+      ctx.strokeStyle = rgb(mezcla(ACENTO, BLANCO, Math.min(1, a * .9)), Math.min(1, a * 1.15));
+      ctx.beginPath(); ctx.moveTo(sx[i - 1], sy[i - 1]); ctx.lineTo(sx[i], sy[i]);
+      if (i + 1 < n) ctx.lineTo(sx[i + 1], sy[i + 1]);
+      ctx.stroke();
+      if (a > .28) {
+        g.strokeStyle = rgb(ACENTO, Math.min(1, (a - .28) * 1.1));
+        g.beginPath(); g.moveTo(sx[i - 1] / 2, sy[i - 1] / 2); g.lineTo(sx[i] / 2, sy[i] / 2);
+        if (i + 1 < n) g.lineTo(sx[i + 1] / 2, sy[i + 1] / 2);
+        g.stroke();
+      }
+    }
+
+    /* Pulsos de luz de esta fila */
+    const resto = ((fila % FILAS) + FILAS) % FILAS;
+    for (const pu of PULSOS) {
+      if (pu.fila !== resto) continue;
+      pulso(pu, zw, z, p, cam, nb, ancho);
+    }
+  }
+}
+
+function pulso(pu, zw, z, p, cam, nb, ancho) {
+  const span = 2 * ENC.ancho + 8;
+  let u = (pu.x0 + pu.vueltas * p) % 1; if (u < 0) u += 1;
+  const xc = cam.x - span / 2 + u * span, dir = Math.sign(pu.vueltas);
+  const pasos = 26, pts = [];
+  for (let s = 0; s <= pasos; s++) {
+    const x = xc - dir * pu.largo * s / pasos;
+    const q = proyectar(x, altura(x, zw, p) + .004, z, cam);
+    pts.push([q[0], q[1], 1 - s / pasos]);
+  }
+  const k = pu.fuerza * nb * zonaTexto(pts[0][0], pts[0][1]);
+  if (k < .02) return;
+  const grosor = Math.max(.9, Math.min(3, 2.8 / Math.sqrt(z))) * ESC;
+  ctx.lineCap = 'round'; g.lineCap = 'round';
+  for (let s = 1; s < pts.length; s++) {
+    const a = k * Math.pow(pts[s][2], 1.6);
+    ctx.strokeStyle = rgb(mezcla(ACENTO, BLANCO, .8), Math.min(1, a));
+    ctx.lineWidth = grosor * (.5 + .5 * pts[s][2]);
+    ctx.beginPath(); ctx.moveTo(pts[s - 1][0], pts[s - 1][1]); ctx.lineTo(pts[s][0], pts[s][1]); ctx.stroke();
+    g.strokeStyle = rgb(ACENTO, Math.min(1, a)); g.lineWidth = grosor * 2.2;
+    g.beginPath(); g.moveTo(pts[s - 1][0] / 2, pts[s - 1][1] / 2); g.lineTo(pts[s][0] / 2, pts[s][1] / 2); g.stroke();
+  }
+  /* Cabeza del pulso */
+  ctx.fillStyle = rgb(BLANCO, Math.min(1, k));
+  ctx.beginPath(); ctx.arc(pts[0][0], pts[0][1], grosor * 1.1, 0, TAU); ctx.fill();
+  g.fillStyle = rgb(BLANCO, Math.min(1, k * .9));
+  g.beginPath(); g.arc(pts[0][0] / 2, pts[0][1] / 2, grosor * 1.8, 0, TAU); g.fill();
+  ctx.lineCap = 'butt'; g.lineCap = 'butt';
+}
+
+/* Niebla luminosa sobre la línea del horizonte: funde las filas lejanas con el cielo */
+function nieblaHorizonte(p) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const v = ctx.createLinearGradient(0, HY - H * .1, 0, HY + H * .2);
+  v.addColorStop(0, rgb(ACENTO, 0)); v.addColorStop(.4, rgb(ACENTO, .03));
+  v.addColorStop(1, rgb(ACENTO, 0));
+  ctx.fillStyle = v; ctx.fillRect(0, HY - H * .08, W, H * .28);
+  ctx.translate(SX, HY + H * .01); ctx.scale(1, .16);
+  const r = ctx.createRadialGradient(0, 0, 0, 0, 0, W * .42);
+  r.addColorStop(0, rgb(ACENTO, .22 * (1 + .05 * Math.sin(TAU * p)))); r.addColorStop(.4, rgb(ACENTO, .07)); r.addColorStop(1, rgb(ACENTO, 0));
+  ctx.fillStyle = r; ctx.fillRect(-W * .42, -W * .42, W * .84, W * .84);
+  ctx.restore();
+}
+
+/* Motas de polvo en el aire, más visibles cerca de la luz */
+function motas(p) {
+  for (const m of MOTAS) {
+    const x = m.x + .035 * m.dx * Math.sin(TAU * (p + m.fase));   // vaivén suave: vuelve a su sitio en cada vuelta
+    const y = m.y + m.dy * Math.sin(TAU * (p + m.fase));
+    const px = x * W, py = y * H;
+    const cerca = Math.exp(-Math.pow((px - SX) / (W * .35), 2) - Math.pow((py - HY) / (H * .35), 2));
+    const a = (.15 + .85 * cerca) * (.5 + .5 * Math.sin(TAU * (p * 2 + m.fase))) * .55 * zonaTexto(px, py);
+    if (a < .03) continue;
+    ctx.fillStyle = rgb(mezcla(ACENTO, BLANCO, .6), a);
+    ctx.beginPath(); ctx.arc(px, py, m.t * ESC, 0, TAU); ctx.fill();
+  }
+}
+
+/* Brillo (bloom), destello alargado del horizonte, zona del texto y viñeta */
+function postproceso() {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.imageSmoothingQuality = 'high';
+  ctx.filter = `blur(${(H * .004).toFixed(1)}px)`; ctx.drawImage(gcv, 0, 0, W, H);
+  ctx.filter = 'none';
+  /* Los halos anchos se desenfocan a 1/8 de tamaño y se amplían: mismo aspecto, mucho más rápido */
+  for (const [radio, alfa] of [[H * .016, .75], [H * .045, .6]]) {
+    pg.clearRect(0, 0, pcv.width, pcv.height);
+    pg.filter = `blur(${(radio / 8).toFixed(2)}px)`;
+    pg.drawImage(gcv, 0, 0, pcv.width, pcv.height);
+    pg.filter = 'none';
+    ctx.globalAlpha = alfa; ctx.drawImage(pcv, 0, 0, W, H);
+  }
+  ctx.globalAlpha = 1;
+  ctx.translate(SX, HY); ctx.scale(1, .05);
+  const gl = ctx.createRadialGradient(0, 0, 0, 0, 0, W * .5);
+  gl.addColorStop(0, rgb(mezcla(ACENTO, BLANCO, .7), .16)); gl.addColorStop(1, rgb(ACENTO, 0));
+  ctx.fillStyle = gl; ctx.fillRect(-W * .5, -W * .5, W, W);
+  ctx.restore();
+
+  /* La zona del texto, un poco más oscura ya en el vídeo */
+  const t = ENC.texto === 'izquierda' ? ctx.createLinearGradient(0, 0, W * .5, 0) : ctx.createLinearGradient(0, 0, 0, H * .5);
+  t.addColorStop(0, 'rgba(0,0,0,.55)'); t.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = t; ctx.fillRect(0, 0, W, H);
+
+  const v = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * .4, W / 2, H / 2, Math.hypot(W, H) * .62);
+  v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.55)');
+  ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
+}
+
+/* =========================================================
+   5. Arranque
+   ========================================================= */
+window.ESCENA = {
+  segundos: SEGUNDOS,
+  /* Dibuja el instante p (0 a 1) y devuelve el fotograma en PNG */
+  fotograma(p) { dibujar(p); return cv.toDataURL('image/png'); },
+  dibujar
+};
+
+if (RENDER) {
+  tamano(+Q.get('w') || (VERTICAL ? 1080 : 1920), +Q.get('h') || (VERTICAL ? 1920 : 1080));
+} else {
+  /* Vista previa en directo, a la resolución de la ventana (más baja si va justo) */
+  const ajustar = () => { const k = Math.min(1, 1600 / innerWidth); tamano(innerWidth * k, innerHeight * k); };
+  addEventListener('resize', ajustar); ajustar();
+  const t0 = performance.now();
+  const bucle = (t) => { dibujar(((t - t0) / 1000 / SEGUNDOS) % 1); requestAnimationFrame(bucle); };
+  requestAnimationFrame(bucle);
+}
+</script>
+</body>
+</html>

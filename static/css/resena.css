@@ -1,0 +1,82 @@
+/* =========================================================
+   ALEXTOLL · Reseñas
+   resena.html (la página que mandas al cliente) y la tarjeta
+   de gracias.html. Se carga después de legal.css.
+   ========================================================= */
+.rv-defs{position:absolute;width:0;height:0;overflow:hidden}
+
+/* Estrellas plateadas (degradado #rv-plata definido en la página) */
+.rv-star{fill:url(#rv-plata);stroke:rgba(255,255,255,.4);stroke-width:.6}
+
+/* ---------- Página ---------- */
+.rv{position:relative;display:grid;justify-items:center;text-align:center;isolation:isolate}
+/* Halo de luz detrás de la tarjeta */
+.rv::before{content:"";position:absolute;z-index:-1;left:50%;top:-60px;width:min(900px,100%);height:520px;transform:translateX(-50%);
+  background:radial-gradient(closest-side, rgba(255,255,255,.11), rgba(255,255,255,.03) 55%, transparent);pointer-events:none}
+
+.rv-card{position:relative;width:100%;max-width:700px;padding:clamp(30px,5.5vw,60px) clamp(20px,5vw,56px) clamp(28px,4.5vw,44px);overflow:hidden}
+/* Reflejo: filete de luz arriba y brillo suave */
+.rv-card::before{content:"";position:absolute;top:0;left:12%;right:12%;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent)}
+.rv-card::after{content:"";position:absolute;inset:0 0 auto;height:220px;background:radial-gradient(60% 100% at 50% 0, rgba(255,255,255,.07), transparent);pointer-events:none}
+.rv-card > *{position:relative;z-index:1}
+
+.rv-stars{display:flex;justify-content:center;gap:clamp(6px,1.6vw,12px);margin:20px 0 24px}
+.rv-stars .rv-star{width:clamp(34px,7vw,48px);height:clamp(34px,7vw,48px);filter:drop-shadow(0 8px 20px rgba(255,255,255,.16))}
+
+.page .rv h1{font-size:clamp(2rem,5.6vw,3.3rem);font-stretch:var(--wide);line-height:1.04;letter-spacing:-.035em;margin:0 auto 16px;max-width:15ch;
+  background:var(--silver);-webkit-background-clip:text;background-clip:text;color:transparent}
+.page .rv .lede{max-width:50ch;margin:0 auto}
+
+.page .rv-steps{list-style:none;padding:0;margin:32px 0 0;display:grid;gap:10px;text-align:left}
+@media (min-width: 640px){ .page .rv-steps{grid-template-columns:repeat(3,1fr)} }
+.rv-steps li{max-width:none;display:grid;gap:3px;align-content:start;padding:16px 16px 18px;border:1px solid var(--line);border-radius:var(--r);background:rgba(255,255,255,.025)}
+.rv-n{font:500 var(--fs-xs)/1 var(--f-mono);color:var(--faint);letter-spacing:.08em;margin-bottom:8px}
+.rv-steps b{font-weight:600}
+.rv-steps small{font-size:var(--fs-sm);color:var(--muted);line-height:1.45}
+
+.rv-acts{display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:32px}
+.rv-acts .btn{min-width:min(100%,340px)}
+.rv-note{margin:14px auto 0;font-size:var(--fs-sm);color:var(--faint)}
+.rv-thanks{margin:26px auto 0;color:var(--muted)}
+.rv-thanks span{display:block;margin-top:6px;font:500 var(--fs-xs)/1 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+
+@media (max-width: 520px){
+  .rv-acts .btn{width:100%;white-space:normal;text-align:center;line-height:1.25;padding:12px 22px}
+}
+
+/* Animación: las estrellas se encienden una a una y luego destellan de vez en cuando */
+.js .rv-stars .rv-star{opacity:0;transform:translateY(8px) scale(.6)}
+.rv-stars.is-on .rv-star{animation:rv-pop .7s var(--ease-out) forwards, rv-glint 6s ease-in-out infinite}
+.rv-stars.is-on .rv-star:nth-child(1){animation-delay:.15s, 1.4s}
+.rv-stars.is-on .rv-star:nth-child(2){animation-delay:.27s, 1.55s}
+.rv-stars.is-on .rv-star:nth-child(3){animation-delay:.39s, 1.7s}
+.rv-stars.is-on .rv-star:nth-child(4){animation-delay:.51s, 1.85s}
+.rv-stars.is-on .rv-star:nth-child(5){animation-delay:.63s, 2s}
+.rv-stars.is-still .rv-star{animation:none;opacity:1;transform:none}
+@keyframes rv-pop{
+  60%{opacity:1;transform:translateY(-2px) scale(1.08)}
+  to{opacity:1;transform:none}
+}
+@keyframes rv-glint{
+  0%,88%,100%{filter:drop-shadow(0 8px 20px rgba(255,255,255,.16)) brightness(1)}
+  94%{filter:drop-shadow(0 0 22px rgba(255,255,255,.55)) brightness(1.35)}
+}
+@media (prefers-reduced-motion: reduce){
+  .js .rv-stars .rv-star{opacity:1;transform:none;animation:none}
+}
+
+/* ---------- Tarjeta en gracias.html ---------- */
+.page a.rv-mini{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:18px;margin-top:44px;padding:18px 22px;
+  color:var(--ink);text-decoration:none;background:var(--card-bg);border:1px solid var(--card-border);border-radius:var(--r-lg);box-shadow:var(--card-shadow);
+  transition:border-color .25s, transform .25s var(--ease-out)}
+.page a.rv-mini:hover{border-color:rgba(255,255,255,.24);transform:translateY(-2px)}
+.rv-mini-stars{display:flex;gap:3px}
+.rv-mini-stars .rv-star{width:18px;height:18px}
+.rv-mini-txt{display:grid;gap:2px}
+.rv-mini-txt small{font-size:var(--fs-sm);color:var(--muted)}
+.rv-mini-go{display:inline-flex;align-items:center;gap:8px;font-weight:600;white-space:nowrap}
+.rv-mini-go .ico-l{width:18px;height:18px;transition:transform .25s var(--ease-out)}
+.rv-mini:hover .ico-arrow{transform:translateX(3px)}
+@media (max-width: 620px){
+  .page a.rv-mini{grid-template-columns:1fr;gap:10px}
+}

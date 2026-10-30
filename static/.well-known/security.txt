@@ -1,0 +1,7 @@
+# Si encuentras un fallo de seguridad en esta web, escríbeme por email.
+# If you find a security issue on this site, please email me.
+Contact: mailto:alextoll2005@gmail.com
+Contact: https://alextoll.store/#contacto
+Expires: 2027-10-01T00:00:00.000Z
+Preferred-Languages: es, en
+Canonical: https://alextoll.store/.well-known/security.txt

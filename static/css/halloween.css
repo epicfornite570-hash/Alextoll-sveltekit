@@ -1,0 +1,54 @@
+/* =========================================================
+   ALEXTOLL · Fondo de Halloween de la cabecera (portada)
+   Edición temporal: sale con HALLOWEEN = true en src/lib/paginas/Portada.svelte
+   y sustituye al vídeo. Movimiento en js/modules/halloween.js.
+   Fondo negro, ondas finas plateadas abajo y una calabaza 3D a la derecha,
+   suspendida justo encima de las ondas, con ascuas, niebla y murciélagos que cruzan por el fondo. El texto (izquierda) queda libre
+   de brillos y niebla.
+   ========================================================= */
+.mk-hero-bg.hw-bg{background:#000}
+.hw-bg::after{display:none}                  /* este fondo lleva su propio velo (.hw-velo) */
+.hw-bg > *{position:absolute;pointer-events:none}
+.hw-ondas{left:0;top:54%;width:100%;height:46%}   /* solo la franja de las ondas (ARRIBA en el JS) */
+/* Murciélagos: cruzan toda la cabecera por el fondo, detrás de la calabaza (junto al texto los apaga halloween-ambiente.js) */
+.hw-murcielagos{inset:0;width:100%;height:100%}
+.hw-velo{inset:0;background:
+  linear-gradient(90deg, #000 0%, rgba(0,0,0,.92) 22%, rgba(0,0,0,.5) 48%, rgba(0,0,0,0) 70%),
+  linear-gradient(0deg, #000, rgba(0,0,0,0) 17%)}
+
+/* Calabaza: un tercio del ancho más o menos (--hw-c = lado del lienzo cuadrado).
+   Su base (el 82 % del lienzo, ver proyectar() en calabaza-gl.js) cae al 73 % del alto,
+   justo sobre las ondas */
+.hw-hero{--hw-c:clamp(300px, 33vw, 700px)}
+.hw-calabaza{right:5vw;top:calc(73% - var(--hw-c) * .82);width:var(--hw-c);height:var(--hw-c)}
+.hw-foto,.hw-3d{position:absolute;inset:0;width:100%;height:100%;max-width:none}
+/* La foto se ve al momento; la escena 3D aparece encima con un fundido y entonces la foto se quita */
+.hw-3d{opacity:0;transition:opacity .9s var(--ease-out);transform-origin:50% 82%;will-change:transform,opacity}
+.hw-foto{transform-origin:50% 82%;will-change:transform}   /* flota igual que el 3D (halloween.js) */
+.hw-3d-on .hw-3d{opacity:1}
+.hw-3d-on .hw-foto{opacity:0;transition:opacity 0s .9s}
+/* Niebla muy fina pegada a la base (no sube a la cara), algo cálida en el centro por la luz de dentro */
+.hw-niebla{position:absolute;left:6%;top:76%;width:88%;height:13%;border-radius:50%;
+  background:radial-gradient(closest-side, rgba(214,120,58,.09), rgba(171,185,196,.06) 55%, rgba(171,185,196,0));
+  animation:hw-niebla 12s ease-in-out infinite alternate;will-change:transform,opacity}
+.hw-quieto .hw-niebla{animation-play-state:paused}
+@keyframes hw-niebla{from{transform:translateX(-2.5%);opacity:.55}to{transform:translateX(2.5%);opacity:.95}}
+/* Bruma de delante (jirones que tapan un poco la parte de abajo; los de detrás van en el lienzo de las ondas) */
+.hw-bruma{position:absolute;left:-45%;top:50%;width:190%;height:60%;max-width:none}
+/* Ascuas: el lienzo sobresale de la caja (10 % a los lados y 35 % por arriba: FUERA_X/FUERA_Y en halloween-ambiente.js) */
+.hw-ascuas{position:absolute;left:-10%;top:-35%;width:120%;height:135%;max-width:none}
+
+/* Móvil y tableta en vertical (el mismo corte que css/portada.css): el texto va arriba
+   y la calabaza debajo, centrada (su silueta va un 0,7 % a la derecha del centro del lienzo).
+   La cabecera crece lo justo para que quepa entera sin tapar el texto */
+@media (max-width: 700px), (max-aspect-ratio: 4/5){
+  .hw-hero{--hw-c:min(88vw, 52vh, 470px)}
+  @supports (height:1svh){ .hw-hero{--hw-c:min(88vw, 52svh, 470px)} }
+  .hw-hero .mk-hero-in{padding-bottom:calc(var(--hw-c) * .8 + 64px)}
+  .hw-calabaza{top:auto;right:auto;left:calc(50% - var(--hw-c) * .507);bottom:40px}
+  .hw-velo{background:linear-gradient(180deg, rgba(0,0,0,.25) 0%, rgba(0,0,0,0) 40%, rgba(0,0,0,0) 92%, #000 100%)}
+}
+@media (prefers-reduced-motion: reduce){
+  .hw-niebla{animation:none}
+  .hw-3d{transition:none}
+}

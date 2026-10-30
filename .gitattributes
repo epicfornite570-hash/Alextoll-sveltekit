@@ -1,0 +1,4 @@
+# Archivos que se ejecutan en Linux (NAS): siempre con saltos de línea LF
+*.sh text eol=lf
+deploy/nas/* text eol=lf
+servidor/*.mjs text eol=lf

@@ -1,0 +1,76 @@
+/* =========================================================
+   ALEXTOLL · 404 con 3D
+   La cabecera (.r4h) tiene dos huecos: #r4-404 (el «404») y
+   #r4-pc (el PC que se monta solo). js/modules/repara404.js
+   pone un lienzo 3D encima de toda la cabecera y coloca cada
+   objeto sobre su hueco, así que aquí se decide dónde va todo.
+   Sin 3D se ven las fotos del 404 y del ordenador montado.
+   ========================================================= */
+
+/* La cabecera sale del ancho del texto (780px) para tener aire */
+.r4h{position:relative;width:min(100vw - 32px,1200px);margin-inline:calc(50% - min(50vw - 16px,600px));padding-top:14px;
+  display:grid;gap:8px;align-items:center}
+.r4-lienzo{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0;opacity:0;transition:opacity .45s ease;
+  touch-action:pan-y;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;cursor:grab}
+.r4h-txt{position:relative;z-index:1;display:grid;gap:16px;justify-items:start;pointer-events:none}
+.r4h-txt > *:not(.r4-hueco){pointer-events:auto}
+.page .r4h h1{margin:0}
+.page .r4h .lede{max-width:34ch}
+.page .r4h .acts{margin-top:8px}
+
+/* Huecos: vacíos para que los toques lleguen al 3D */
+.r4-hueco{position:relative;pointer-events:none}
+.r4-hueco-404{width:min(100%,460px);aspect-ratio:2.1/1;container-type:size}
+/* Foto del «404» 3D en reposo: ocupa justo lo que ocupará el 3D (base 3.6×1.75 + margen) y se
+   va cuando el lienzo ya se ve, así el cambio no se nota. Si no hay 3D se queda. */
+.r4-foto{position:absolute;left:50%;top:50%;width:106%;width:calc(min(100cqw,205.714cqh) * 1.06);transform:translate(-50%,-50%);
+  transition:opacity .3s ease .45s}
+.r4-foto img{display:block;width:100%;height:auto}
+.r4-3d .r4-lienzo{opacity:1}
+.r4-3d .r4-foto{opacity:0}
+/* El hueco del PC ocupa su sitio desde el principio (sin saltos al cargar el 3D) */
+/* Abajo queda una franja para el botón y la pista: así nunca tapan el PC */
+.r4-hueco-pc{--r4-banda:72px;height:calc(clamp(380px,100vw,520px) + var(--r4-banda))}
+.r4-pista{position:absolute;left:0;right:0;bottom:0;text-align:center;font-size:var(--fs-xs);color:var(--faint);margin:0;
+  opacity:0;transition:opacity .4s}
+.r4-pclisto .r4-pista{opacity:1}
+.r4-otra{position:absolute;left:0;right:0;bottom:26px;width:max-content;margin-inline:auto;pointer-events:auto;z-index:1}
+/* Los textos del hueco ocupan todo su ancho (legal.css limita los párrafos a 68ch) */
+.page .r4-carga,.page .r4-pista{max-width:none}
+/* Mientras llega el ordenador: un aviso discreto en su hueco */
+.r4-carga{position:absolute;left:0;right:0;top:calc((100% - var(--r4-banda)) * .5 - .6em);margin:0;text-align:center;font-size:var(--fs-xs);color:var(--faint);
+  opacity:0;transition:opacity .4s}
+.js .r4-3d:not(.r4-pclisto):not(.r4-pcfallo) .r4-carga{opacity:1;animation:r4-late 1.6s ease-in-out infinite}
+@keyframes r4-late{50%{opacity:.45}}
+/* Foto del ordenador montado: sin JavaScript, sin WebGL o si el modelo no carga */
+.r4-pcfoto{display:none;position:absolute;inset:0 0 var(--r4-banda);width:100%;height:calc(100% - var(--r4-banda));object-fit:contain}
+html:not(.js) .r4-pcfoto,.r4-sin3d .r4-pcfoto,.r4-pcfallo .r4-pcfoto{display:block}
+@media (prefers-reduced-motion: reduce){.js .r4-3d:not(.r4-pclisto):not(.r4-pcfallo) .r4-carga{animation:none}}
+
+/* Ordenador: texto a la izquierda, PC a la derecha */
+@media (min-width: 900px){
+  .r4h{grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);min-height:clamp(560px,76vh,720px);gap:24px}
+  .r4-hueco-pc{height:calc(clamp(480px,64vh,640px) + var(--r4-banda))}
+  .r4-hueco-404{aspect-ratio:2/1}
+}
+
+/* Ficha de la pieza tocada */
+.r4-info{border:1px solid var(--rule);border-radius:var(--r);background:var(--card-bg);padding:16px 18px;display:grid;gap:6px;margin-top:20px}
+.r4-info h2{margin:0;font-size:1.05rem}
+.page .r4-info p{color:var(--muted);margin:0}
+.page .r4-info a{justify-self:start;margin-top:4px;font-weight:600}
+
+/* Enlaces a los servicios */
+.r4-servicios{margin-top:clamp(28px,5vw,48px)}
+.page .r4-servicios h2{margin:0 0 14px}
+.page .r4-piezas{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.r4-piezas a{display:grid;gap:4px;height:100%;padding:14px 16px;border:1px solid var(--card-border);border-radius:var(--r);
+  background:var(--surface);text-decoration:none;transition:border-color .2s,background .2s}
+.page .r4-piezas a{color:var(--ink)}
+.r4-piezas a:hover,.r4-piezas a:focus-visible{border-color:rgba(255,255,255,.4);background:var(--surface-2)}
+.r4-piezas b{font-size:.95rem}
+.r4-piezas span{font-size:var(--fs-xs);color:var(--muted)}
+
+@media (max-width: 720px){
+  .page .r4-piezas{grid-template-columns:repeat(2,minmax(0,1fr))}
+}

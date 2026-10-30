@@ -1,0 +1,30 @@
+# Dependencias y carpetas que genera Netlify en local
+node_modules/
+.netlify/
+
+# Archivos del sistema y de OneDrive
+.DS_Store
+Thumbs.db
+desktop.ini
+*.tmp
+*.log
+
+# Copia del zip original (no hace falta en el repositorio)
+*.zip
+# Datos del contador de visitas (se crean en el servidor)
+servidor/datos/
+# SvelteKit: se crean al compilar (npm run build)
+.svelte-kit/
+build/
+# Facturas personales del flujo 19 (viven solo en el NAS)
+deploy/n8n/facturas/
+
+# Claves y secretos: nunca al repositorio (viven solo en el NAS: .env)
+.env
+.env.*
+!.env.ejemplo
+*.pem
+*.key
+*.p12
+claves/
+credenciales*.json

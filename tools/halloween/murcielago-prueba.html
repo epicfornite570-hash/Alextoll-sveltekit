@@ -1,0 +1,22 @@
+<!doctype html><meta charset="utf-8"><title>Murciélago</title>
+<!-- Banco de pruebas del murciélago (AT.halloweenAmbiente.murcielago): 8 momentos del aleteo
+     (columnas) en tres vuelos (filas: se aleja, viene hacia ti y casi de lado); la última fila,
+     con la brasa de la calabaza cerca. ?env=240 cambia el tamaño -->
+<body style="margin:0;background:#000"><canvas id="c"></canvas>
+<script src="../../static/js/modules/halloween-ambiente.js"></script>
+<script>
+const env = +(new URLSearchParams(location.search).get('env') || 240), paso = env * 1.15;
+const c = document.getElementById('c'), x = c.getContext('2d');
+c.width = paso * 8; c.height = paso * 4;
+const g = x.createRadialGradient(paso * 4, paso * 3.5, 0, paso * 4, paso * 3.5, paso * 2.5);
+g.addColorStop(0, 'rgba(255,140,50,.35)'); g.addColorStop(1, 'rgba(255,140,50,0)');
+x.fillStyle = g; x.fillRect(0, paso * 3, c.width, paso);
+for (let i = 0; i < 8; i++) for (let f = 0; f < 4; f++) {
+  AT.halloweenAmbiente.murcielago(x, {
+    x: paso * (i + .5), y: paso * (f + .5), env, fase: i / 8 * Math.PI * 2, dx: -1, dy: 0,
+    fondo: [.85, -.85, .35, .85][f], vista: [.25, .25, .25, .25][f], giro: 0, alfa: 1, ojos: 1,
+    luz: f === 3 ? { x: paso * 4, y: paso * 3.6, r: paso * 3 } : null
+  });
+}
+document.documentElement.dataset.listo = 1;
+</script>

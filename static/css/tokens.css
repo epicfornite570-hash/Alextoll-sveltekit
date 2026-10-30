@@ -1,0 +1,81 @@
+/* =========================================================
+   ALEXTOLL · Tokens de diseño
+   ---------------------------------------------------------
+   Concepto: tecnología premium, como la presentación de un
+   coche o de un portátil de gama alta. Negro profundo,
+   blanco, plata y grises. Casi nada de color.
+
+   Reglas de la casa:
+   - Sin colores de acento: la acción principal es un botón blanco.
+   - Esquinas muy redondeadas: tarjetas (--r-lg), botones en cápsula.
+   - Mucho aire entre bloques. Titulares grandes y limpios.
+   - Brillos y sombras siempre muy sutiles.
+   Cambia un valor aquí y se actualiza en todas las páginas.
+   ========================================================= */
+:root{
+  /* Negro, grafito y plata */
+  --bg:#000000;
+  --bg-2:#07070A;             /* bandas alternas, casi imperceptibles */
+  --surface:#0E0E11;          /* tarjetas */
+  --surface-2:#16161A;        /* tarjetas al pasar el ratón, campos */
+  --ink:#F5F5F7;              /* texto principal */
+  --muted:#A1A1A8;            /* texto secundario */
+  --faint:#86868E;            /* textos pequeños de apoyo (contraste 5.6:1 sobre negro) */
+  --line:rgba(255,255,255,.08);
+  --rule:rgba(255,255,255,.14);   /* filetes y bordes de cajas */
+  --silver:linear-gradient(180deg,#FFFFFF 0%,#C9CBD1 48%,#7E8088 100%);
+
+  /* "Acento": blanco. Botón principal blanco con texto negro */
+  --accent:#FFFFFF;
+  --accent-hover:#E4E4E8;
+  --accent-ink:#000000;
+  --accent-soft:rgba(255,255,255,.07);
+  --video-accent:#DCE2EA;     /* color de la luz del vídeo (tools/video) */
+
+  /* Tarjetas premium */
+  --card-bg:linear-gradient(180deg,#141418 0%,#0B0B0E 100%);
+  --card-border:rgba(255,255,255,.08);
+  --card-shadow:0 1px 0 rgba(255,255,255,.06) inset;   /* sin sombra negra difuminada: sobre el fondo negro no se veía y hacía ir a tirones la carga */
+  --glass:rgba(18,18,22,.55);
+
+  /* Dibujos técnicos (placa y chip) */
+  --draw-ink:#D8D8DE;
+  --draw-fill:#0E0E11;
+  --draw-fill-2:#1A1A1F;
+  --draw-trace:#3E3E46;
+
+  /* Gráficos (panel de estadísticas) */
+  --chart:#D8D8DE;
+
+  /* Estados */
+  --ok:#E8E8EC;
+  --err:#FF8A80;
+
+  /* Tipografía */
+  --f-sans:"Archivo", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --wide:104%;                /* anchura de los titulares (Archivo es variable) */
+
+  /* Escala tipográfica */
+  --fs-xs:.8125rem;
+  --fs-sm:.9375rem;
+  --fs-base:1.0625rem;
+  --fs-md:1.1875rem;
+  --fs-lg:clamp(1.3rem, 2vw, 1.5rem);
+  --fs-xl:clamp(2rem, 3.6vw, 2.9rem);
+  --fs-hero:clamp(2.3rem, 4.1vw, 3.4rem);
+  --fs-display:clamp(3rem, 6.6vw, 5.6rem);   /* titular de la portada */
+
+  /* Forma y espacio */
+  --r:14px;                   /* campos, botones pequeños, cajas */
+  --r-lg:24px;                /* tarjetas */
+  --pill:999px;               /* botones y menú */
+  --gutter:clamp(18px, 4vw, 40px);
+  --maxw:1200px;
+  --nav-h:64px;
+  --nav-top:14px;
+  --section-y:clamp(68px, 8.5vw, 112px);
+
+  --ease-out:cubic-bezier(.2,.8,.2,1);
+  color-scheme:dark;
+}

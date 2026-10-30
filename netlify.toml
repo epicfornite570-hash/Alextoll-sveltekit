@@ -1,0 +1,142 @@
+# =========================================================
+# Configuración de Netlify (se aplica sola al publicar)
+# ---------------------------------------------------------
+# AHORA NO SE USA: la web está en el NAS con deploy/nas/nginx.conf, que es la
+# configuración buena. Si algún día vuelves a Netlify, copia de allí las cabeceras
+# (clientes.html necesita su propia Content-Security-Policy con los dominios de Firebase).
+# =========================================================
+
+# La web se genera con SvelteKit (npm run build) en la carpeta build/.
+# Las funciones (contador de visitas) están en netlify/functions.
+[build]
+  command = "npm run build"
+  publish = "build"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# Cabeceras de seguridad para todas las páginas
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Strict-Transport-Security = "max-age=63072000; includeSubDomains"
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "accelerometer=(), browsing-topics=(), camera=(), display-capture=(), geolocation=(), gyroscope=(), hid=(), magnetometer=(), microphone=(), midi=(), payment=(), serial=(), usb=()"
+    Cross-Origin-Opener-Policy = "same-origin"
+    Cross-Origin-Resource-Policy = "same-origin"
+    # Content-Security-Policy: qué puede cargar la web.
+    # Si añades una herramienta externa (estadísticas, mapas, vídeos...),
+    # añade su dominio en script-src / connect-src / frame-src o no funcionará.
+    # script-src lleva 'unsafe-inline' porque SvelteKit arranca cada página con un
+    # script pequeño escrito dentro del HTML. No abre la puerta a otros scripts: cada
+    # página trae también su propia regla (<meta http-equiv="content-security-policy">)
+    # que solo deja pasar ESE script por su huella (sha256), y el navegador aplica las dos.
+    # style-src: la huella (sha256) con 'unsafe-hashes' deja pasar SOLO el estilo del aviso
+    # invisible para lectores de pantalla que SvelteKit pone en cada página (#svelte-announcer).
+    # Si al actualizar SvelteKit cambia ese estilo, la consola avisa; se calcula con:
+    #   printf '%s' "<estilo>" | openssl dgst -sha256 -binary | base64
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; worker-src 'self'; style-src 'self' 'unsafe-hashes' 'sha256-S8qMpvofolR8Mpjy4kQvEm7m1q8clzU4dfDH0AmvZjo='; img-src 'self' data:; font-src 'self'; media-src 'self'; connect-src 'self' blob: https://api.web3forms.com; manifest-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self' https://api.web3forms.com; frame-ancestors 'none'; upgrade-insecure-requests"
+
+# Tarjeta de contacto: que el móvil la abra como contacto
+[[headers]]
+  for = "/assets/alextoll.vcf"
+  [headers.values]
+    Content-Type = "text/vcard; charset=utf-8"
+    Content-Disposition = "attachment; filename=Alextoll.vcf"
+
+# El panel de estadísticas no debe guardarse en cachés ni aparecer en buscadores
+[[headers]]
+  for = "/estadisticas.html"
+  [headers.values]
+    Cache-Control = "no-store"
+    X-Robots-Tag = "noindex, nofollow"
+
+# Fuentes e imágenes casi nunca cambian: el navegador las guarda un año
+[[headers]]
+  for = "/assets/fonts/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/assets/img/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
+
+[[headers]]
+  for = "/assets/video/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
+
+# Direcciones bonitas: /privacidad lleva a /privacidad.html
+# La antigua página "Sobre mí" ahora es el portfolio
+[[redirects]]
+  from = "/sobre-mi"
+  to = "https://alextoll.xyz/"
+  status = 301
+[[redirects]]
+  from = "/sobre-mi.html"
+  to = "https://alextoll.xyz/"
+  status = 301
+[[redirects]]
+  from = "/en/about.html"
+  to = "https://alextoll.xyz/"
+  status = 301
+[[redirects]]
+  from = "/privacidad"
+  to = "/privacidad.html"
+  status = 301
+[[redirects]]
+  from = "/cookies"
+  to = "/cookies.html"
+  status = 301
+[[redirects]]
+  from = "/aviso-legal"
+  to = "/aviso-legal.html"
+  status = 301
+
+# Archivos internos que no deben verse en internet
+[[redirects]]
+  from = "/tools/*"
+  to = "/404.html"
+  status = 404
+  force = true
+[[redirects]]
+  from = "/netlify/*"
+  to = "/404.html"
+  status = 404
+  force = true
+[[redirects]]
+  from = "/package.json"
+  to = "/404.html"
+  status = 404
+  force = true
+[[redirects]]
+  from = "/README.md"
+  to = "/404.html"
+  status = 404
+  force = true
+
+# Las notas internas (esta guía, el informe, el LEEME) no se publican
+[[redirects]]
+  from = "/docs/*"
+  to = "/404.html"
+  status = 404
+  force = true
+[[redirects]]
+  from = "/servidor/*"
+  to = "/404.html"
+  status = 404
+  force = true
+[[redirects]]
+  from = "/deploy/*"
+  to = "/404.html"
+  status = 404
+  force = true
+[[redirects]]
+  from = "/LEEME.md"
+  to = "/404.html"
+  status = 404
+  force = true

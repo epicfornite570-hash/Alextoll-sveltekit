@@ -1,0 +1,233 @@
+<!doctype html>
+<!-- =========================================================
+     Fondo de la página de reparación de móviles (reparacion-moviles.html)
+     Negro, azul marino y morado suave, líneas de luz, pistas de circuito
+     y dos móviles desenfocados a los lados. El centro queda limpio para el texto.
+
+     Lo dibuja tools/imagen-moviles.cjs (Chrome sin ventana) y lo guarda en
+     assets/img/moviles/. Para mirarlo: abre este archivo en Chrome
+     (?w=1920&h=1080 o ?v=vertical para el encuadre de móvil).
+     Cambia SEMILLA para otra colocación de las pistas y las chispas.
+     ========================================================= -->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Fondo · Reparación de móviles</title>
+<style>html,body{margin:0;background:#000}canvas{display:block;width:100vw;height:auto}</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const P = new URLSearchParams(location.search);
+const VERTICAL = P.get('v') === 'vertical';
+const W = +P.get('w') || (VERTICAL ? 1080 : 2560);
+const H = +P.get('h') || (VERTICAL ? 1920 : 1440);
+const SEMILLA = 7;
+
+/* Colores (del negro al azul marino y un morado muy apagado) */
+const C = {
+  negro: '#020205', marino: '#07112b', marinoLuz: '#1d3a8a', morado: '#2a1450', moradoLuz: '#6b4bd6',
+  hielo: '#b9c8ff', plata: '#d8dcea'
+};
+
+const cv = document.getElementById('c');
+cv.width = W; cv.height = H;
+const g = cv.getContext('2d');
+const U = Math.min(W, H) / 1000;          // unidad: 1/1000 del lado corto
+
+/* Azar con semilla: misma imagen cada vez */
+let s = SEMILLA;
+const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+
+/* Zona del texto (centro): se deja casi vacía */
+const centro = VERTICAL ? { x: W * .5, y: H * .47, rx: W * .62, ry: H * .2 } : { x: W * .5, y: H * .48, rx: W * .27, ry: H * .3 };
+const enCentro = (x, y) => ((x - centro.x) / centro.rx) ** 2 + ((y - centro.y) / centro.ry) ** 2 < 1;
+
+/* Dónde van los móviles: [x, y, alto, giro, desenfoque, opacidad] */
+const MOVILES = VERTICAL
+  ? [[W * .84, H * .14, H * .3, .26, 7 * U, .8], [W * .16, H * .87, H * .34, -.22, 4 * U, .9]]
+  : [[W * .14, H * .64, H * .76, -.2, 5 * U, .92], [W * .88, H * .36, H * .62, .17, 9 * U, .72]];
+
+function fondo() {
+  g.fillStyle = C.negro; g.fillRect(0, 0, W, H);
+  const lin = g.createLinearGradient(0, 0, W, H);
+  lin.addColorStop(0, '#010105'); lin.addColorStop(.45, '#040a1d'); lin.addColorStop(1, '#0b0619');
+  g.fillStyle = lin; g.fillRect(0, 0, W, H);
+  const brillo = (x, y, r, color, a) => {
+    const rg = g.createRadialGradient(x, y, 0, x, y, r);
+    rg.addColorStop(0, color + Math.round(a * 255).toString(16).padStart(2, '0'));
+    rg.addColorStop(1, color + '00');
+    g.fillStyle = rg; g.fillRect(0, 0, W, H);
+  };
+  /* Luz azul detrás del móvil grande y morada detrás del otro */
+  brillo(MOVILES[0][0], MOVILES[0][1], H * .75, C.marinoLuz, .32);
+  brillo(MOVILES[1][0], MOVILES[1][1], H * .7, C.morado, .55);
+  brillo(MOVILES[1][0], MOVILES[1][1], H * .35, C.moradoLuz, .12);
+  /* Un velo de luz muy suave arriba en el centro, detrás del titular */
+  brillo(W * .5, H * (VERTICAL ? .36 : .3), Math.max(W, H) * .45, '#1a2350', .28);
+}
+
+/* Pistas de circuito: líneas rectas con giros de 45° y un punto al final */
+function circuitos() {
+  const paso = 26 * U;
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  for (let i = 0; i < (VERTICAL ? 110 : 150); i++) {
+    let x = Math.round(rnd() * W / paso) * paso, y = Math.round(rnd() * H / paso) * paso;
+    if (enCentro(x, y)) continue;
+    const pts = [[x, y]];
+    let dir = Math.floor(rnd() * 4) * Math.PI / 2;
+    const tramos = 2 + Math.floor(rnd() * 3);
+    for (let t = 0; t < tramos; t++) {
+      const largo = paso * (2 + Math.floor(rnd() * 7));
+      x += Math.cos(dir) * largo; y += Math.sin(dir) * largo;
+      if (enCentro(x, y)) break;
+      pts.push([x, y]);
+      dir += (rnd() < .5 ? -1 : 1) * Math.PI / 4;
+    }
+    if (pts.length < 2) continue;
+    const cerca = Math.min(...MOVILES.map(m => Math.hypot(pts[0][0] - m[0], pts[0][1] - m[1]))) / H;
+    const a = Math.max(.05, .2 - cerca * .16);
+    g.strokeStyle = `rgba(150,170,255,${a})`;
+    g.lineWidth = 1.3 * U;
+    g.beginPath(); pts.forEach(([px, py], k) => k ? g.lineTo(px, py) : g.moveTo(px, py)); g.stroke();
+    const [ex, ey] = pts[pts.length - 1];
+    g.fillStyle = `rgba(190,200,255,${a * 1.6})`;
+    g.beginPath(); g.arc(ex, ey, 2.6 * U, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = `rgba(190,200,255,${a})`;
+    g.beginPath(); g.arc(pts[0][0], pts[0][1], 3.4 * U, 0, Math.PI * 2); g.stroke();
+  }
+}
+
+/* Líneas de luz: curvas largas y suaves con un resplandor desenfocado */
+function lineasLuz() {
+  const curvas = VERTICAL ? [
+    [[-.1, .72], [.3, .58], [.7, .9], [1.1, .7], '#7f9cff', .55],
+    [[-.1, .8], [.4, .7], [.65, .98], [1.1, .82], '#9b7bff', .4],
+    [[-.1, .22], [.35, .3], [.7, .05], [1.1, .2], '#7f9cff', .3]
+  ] : [
+    [[-.05, .86], [.3, .64], [.62, 1.02], [1.05, .74], '#7f9cff', .6],
+    [[-.05, .93], [.35, .76], [.6, 1.06], [1.05, .84], '#9b7bff', .45],
+    [[-.05, .12], [.3, .26], [.66, -.02], [1.05, .16], '#7f9cff', .32],
+    [[.55, -.05], [.7, .3], [.8, .5], [1.05, .62], '#b9a6ff', .22]
+  ];
+  for (const [a, b, c, d, color, fuerza] of curvas) {
+    const pts = [a, b, c, d].map(([x, y]) => [x * W, y * H]);
+    const grad = g.createLinearGradient(pts[0][0], pts[0][1], pts[3][0], pts[3][1]);
+    grad.addColorStop(0, color + '00'); grad.addColorStop(.35, color + 'ff'); grad.addColorStop(.7, color + 'cc'); grad.addColorStop(1, color + '00');
+    const trazo = (ancho, alfa, blur) => {
+      g.save(); g.filter = blur ? `blur(${blur}px)` : 'none'; g.globalAlpha = alfa * fuerza; g.strokeStyle = grad; g.lineWidth = ancho;
+      g.beginPath(); g.moveTo(...pts[0]); g.bezierCurveTo(...pts[1], ...pts[2], ...pts[3]); g.stroke(); g.restore();
+    };
+    trazo(22 * U, .4, 22 * U);    // resplandor
+    trazo(5 * U, .6, 3 * U);
+    trazo(1.4 * U, 1, 0);         // hilo de luz
+  }
+}
+
+/* Chispas: puntitos de luz, más en los bordes */
+function chispas() {
+  for (let i = 0; i < (VERTICAL ? 90 : 140); i++) {
+    const x = rnd() * W, y = rnd() * H;
+    if (enCentro(x, y) && rnd() < .85) continue;
+    const r = (rnd() < .97 ? .7 + rnd() * 1.2 : 2 + rnd() * 1.2) * U;
+    const a = .12 + rnd() * .42;
+    const rg = g.createRadialGradient(x, y, 0, x, y, r * 4);
+    rg.addColorStop(0, `rgba(210,215,255,${a})`); rg.addColorStop(1, 'rgba(210,215,255,0)');
+    g.fillStyle = rg; g.beginPath(); g.arc(x, y, r * 4, 0, Math.PI * 2); g.fill();
+  }
+}
+
+/* Un móvil (en su propio lienzo, para desenfocarlo entero) */
+function movil(alto, roto) {
+  const ancho = alto * .48, m = alto * .12;
+  const c = document.createElement('canvas');
+  c.width = Math.ceil(ancho + m * 2); c.height = Math.ceil(alto + m * 2);
+  const x = c.getContext('2d');
+  const r = ancho * .16, b = ancho * .035;
+  const rr = (px, py, w, h, rad) => { x.beginPath(); x.roundRect(px, py, w, h, rad); };
+  x.translate(m, m);
+  /* Cuerpo */
+  const cuerpo = x.createLinearGradient(0, 0, ancho, alto);
+  cuerpo.addColorStop(0, '#1a1d2a'); cuerpo.addColorStop(.5, '#0b0d16'); cuerpo.addColorStop(1, '#151226');
+  rr(0, 0, ancho, alto, r); x.fillStyle = cuerpo; x.fill();
+  /* Canto con luz (azul por un lado, morado por el otro) */
+  const canto = x.createLinearGradient(0, 0, ancho, alto);
+  canto.addColorStop(0, 'rgba(200,215,255,.85)'); canto.addColorStop(.3, 'rgba(120,140,220,.25)');
+  canto.addColorStop(.7, 'rgba(140,110,230,.2)'); canto.addColorStop(1, 'rgba(190,160,255,.7)');
+  x.lineWidth = ancho * .012; x.strokeStyle = canto; rr(0, 0, ancho, alto, r); x.stroke();
+  /* Pantalla */
+  const pw = ancho - b * 2, ph = alto - b * 2;
+  const pant = x.createLinearGradient(0, 0, pw * .4, ph);
+  pant.addColorStop(0, '#0d1633'); pant.addColorStop(.55, '#070a18'); pant.addColorStop(1, '#120a26');
+  rr(b, b, pw, ph, r * .82); x.fillStyle = pant; x.fill();
+  /* Reflejo diagonal sobre el cristal */
+  x.save(); rr(b, b, pw, ph, r * .82); x.clip();
+  const refl = x.createLinearGradient(0, 0, ancho, alto * .6);
+  refl.addColorStop(0, 'rgba(255,255,255,0)'); refl.addColorStop(.42, 'rgba(255,255,255,0)');
+  refl.addColorStop(.5, 'rgba(220,230,255,.13)'); refl.addColorStop(.6, 'rgba(255,255,255,0)');
+  x.fillStyle = refl; x.fillRect(0, 0, ancho, alto);
+  /* Grieta: líneas que salen de un punto de golpe */
+  if (roto) {
+    const gx = pw * .68 + b, gy = ph * .3 + b;
+    /* Grietas largas y casi rectas (el cristal se raja en línea), con alguna rama corta */
+    x.strokeStyle = 'rgba(215,225,255,.42)'; x.lineCap = 'round'; x.lineJoin = 'miter';
+    const raja = (px, py, ang, largo, grosor, ramas) => {
+      x.lineWidth = grosor; x.beginPath(); x.moveTo(px, py);
+      const tramos = 4 + Math.floor(rnd() * 3);
+      for (let t = 0; t < tramos; t++) {
+        const l = largo / tramos;
+        ang += (rnd() - .5) * .32; px += Math.cos(ang) * l; py += Math.sin(ang) * l; x.lineTo(px, py);
+        if (ramas && rnd() < .35) { x.stroke(); raja(px, py, ang + (rnd() < .5 ? -1 : 1) * (.5 + rnd() * .5), largo * .25, grosor * .7, false); x.lineWidth = grosor; x.beginPath(); x.moveTo(px, py); }
+      }
+      x.stroke();
+    };
+    for (let i = 0; i < 8; i++) raja(gx, gy, i / 8 * Math.PI * 2 + rnd() * .5, ancho * (.35 + rnd() * .55), ancho * (.004 + rnd() * .003), true);
+    x.lineWidth = ancho * .004;
+    x.beginPath();
+    for (let k = 0; k <= 9; k++) { const a = k / 9 * Math.PI * 2, rr2 = ancho * (.045 + rnd() * .02); k ? x.lineTo(gx + Math.cos(a) * rr2, gy + Math.sin(a) * rr2) : x.moveTo(gx + Math.cos(a) * rr2, gy + Math.sin(a) * rr2); }
+    x.stroke();
+    const golpe = x.createRadialGradient(gx, gy, 0, gx, gy, ancho * .12);
+    golpe.addColorStop(0, 'rgba(220,230,255,.18)'); golpe.addColorStop(1, 'rgba(220,230,255,0)');
+    x.fillStyle = golpe; x.fillRect(0, 0, ancho, alto);
+  }
+  x.restore();
+  /* Cámara frontal */
+  x.fillStyle = '#02030a'; x.beginPath(); x.arc(ancho / 2, b + ph * .03, ancho * .022, 0, Math.PI * 2); x.fill();
+  return { c, ancho, alto, m };
+}
+
+function moviles() {
+  MOVILES.forEach(([mx, my, alto, giro, blur, alfa], i) => {
+    const m = movil(alto, i === 0);
+    g.save();
+    g.translate(mx, my); g.rotate(giro);
+    /* Sombra/halo debajo */
+    const halo = g.createRadialGradient(0, 0, 0, 0, 0, alto * .7);
+    halo.addColorStop(0, i ? 'rgba(107,75,214,.18)' : 'rgba(60,100,230,.18)'); halo.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = halo; g.fillRect(-alto, -alto, alto * 2, alto * 2);
+    g.filter = `blur(${blur}px)`; g.globalAlpha = alfa;
+    g.drawImage(m.c, -m.ancho / 2 - m.m, -m.alto / 2 - m.m);
+    g.restore();
+  });
+}
+
+/* Viñeta y grano fino (evita bandas en los degradados al comprimir) */
+function acabado() {
+  const v = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * .3, W / 2, H / 2, Math.hypot(W, H) * .6);
+  v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.55)');
+  g.fillStyle = v; g.fillRect(0, 0, W, H);
+  /* Oscurece un poco el centro para que el texto se lea bien */
+  const t = g.createRadialGradient(centro.x, centro.y, 0, centro.x, centro.y, Math.max(centro.rx, centro.ry) * 1.1);
+  t.addColorStop(0, 'rgba(2,3,10,.45)'); t.addColorStop(1, 'rgba(2,3,10,0)');
+  g.fillStyle = t; g.fillRect(0, 0, W, H);
+  const img = g.getImageData(0, 0, W, H), d = img.data;
+  for (let i = 0; i < d.length; i += 4) { const n = (rnd() - .5) * 5; d[i] += n; d[i + 1] += n; d[i + 2] += n; }
+  g.putImageData(img, 0, 0);
+}
+
+fondo(); circuitos(); lineasLuz(); moviles(); chispas(); acabado();
+window.LISTO = true;
+window.imagen = (tipo = 'image/webp', calidad = .84) => cv.toDataURL(tipo, calidad);
+</script>
+</body>
+</html>

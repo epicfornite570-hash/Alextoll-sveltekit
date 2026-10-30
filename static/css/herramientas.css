@@ -1,0 +1,150 @@
+/* =========================================================
+   ALEXTOLL · Herramientas (diagnostico.html)
+   Placa base interactiva, diagnóstico por síntomas y asesor
+   "¿mejorarlo o comprar otro?". Usa tokens, base y layout.
+   ========================================================= */
+.tool-hero{padding-block:clamp(40px,6vw,72px) clamp(24px,4vw,40px)}
+.tool-hero .wrap{display:grid;gap:18px;justify-items:start}
+.tool-hero h1{font-size:clamp(2.4rem,5vw,4rem);font-weight:650;letter-spacing:-.035em;max-width:16ch}
+.tool-hero p{color:var(--muted);font-size:var(--fs-md);max-width:56ch}
+.tool-nav{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+
+/* =========================================================
+   1b. LA PLACA: dibujo técnico con las piezas numeradas
+   ========================================================= */
+.placa-in{display:grid;gap:clamp(28px,4vw,56px)}
+@media (min-width: 1000px){ .placa-in{grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);align-items:start} }
+.placa-copy{display:grid;align-content:start}
+
+/* Leyenda de piezas (como en un despiece de manual) */
+.legend-box{border-top:1px solid var(--rule);padding-top:14px}
+.legend-box h3{font-size:var(--fs-sm);font-stretch:100%;letter-spacing:0;font-weight:700;margin-bottom:10px}
+.legend{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,200px),1fr));gap:2px 16px}
+.legend button{display:flex;align-items:center;gap:10px;width:100%;padding:7px 4px;background:none;border:0;border-radius:var(--r);text-align:left;font-size:.95rem;cursor:pointer;color:var(--ink)}
+.legend button:hover{background:var(--surface-2)}
+.legend button[aria-pressed="true"]{color:var(--accent);font-weight:600}
+.num{display:inline-grid;place-items:center;width:24px;height:24px;flex:none;border:1px solid var(--card-border);border-radius:var(--r-lg);background:var(--card-bg);box-shadow:var(--card-shadow);font:600 .78rem/1 var(--f-mono)}
+[aria-pressed="true"] > .num{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+
+/* El dibujo */
+.board-fig{margin:0;display:grid;gap:16px}
+.board{position:relative;width:100%}
+.board-svg{width:100%;height:auto}
+.board-svg .pcb{fill:var(--draw-fill);stroke:var(--draw-ink);stroke-width:1.6}
+.board-svg .holes circle{fill:var(--bg);stroke:var(--draw-ink);stroke-width:1.2}
+.board-svg .traces path{fill:none;stroke:var(--draw-trace);stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
+.board-svg .vias circle{fill:var(--draw-fill);stroke:var(--draw-trace);stroke-width:1.4}
+.board-svg .c{fill:var(--draw-fill-2);stroke:var(--draw-ink);stroke-width:1.1}
+.board-svg .c2{fill:var(--draw-fill);stroke:var(--draw-ink);stroke-width:1.1}
+.board-svg .d{stroke:var(--draw-ink);stroke-width:1;opacity:.55}
+.board-svg .blade{fill:var(--draw-fill);stroke:var(--draw-ink);stroke-width:1}
+.board-svg .lbl{fill:var(--draw-ink);font-family:var(--f-mono);font-size:7px}
+.board-svg .silk text,.board-svg .silk-title{fill:var(--muted);font-family:var(--f-mono);font-size:9.5px;letter-spacing:.04em}
+.board-svg .hl{fill:transparent;stroke:transparent;stroke-width:2;stroke-dasharray:5 4;transition:stroke .2s, fill .2s}
+.board-svg .part.is-on .hl{stroke:var(--accent);fill:color-mix(in srgb, var(--accent) 12%, transparent)}
+.board-svg .part.is-on .c,.board-svg .part.is-on .c2,.board-svg .part.is-on .blade{stroke:var(--accent)}
+.board-svg .fan-rotor{transform-box:fill-box;transform-origin:center}
+.board-svg .part.is-on .fan-rotor{animation:spin 1.4s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Llamadas numeradas sobre las piezas */
+.hotspot{position:absolute;left:var(--x);top:var(--y);width:30px;height:30px;margin:-15px 0 0 -15px;padding:0;border:0;background:none;cursor:pointer;display:grid;place-items:center;z-index:2}
+.hotspot .num{width:26px;height:26px;font-size:.8rem;transition:background-color .15s, color .15s, border-color .15s}
+.hotspot:hover .num{background:var(--ink);color:var(--bg)}
+.hotspot[aria-pressed="true"] .num{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+@media (max-width: 480px){ .hotspot .num{width:22px;height:22px;font-size:.72rem} }
+
+/* Ficha de la pieza */
+.part-info{border:1px solid var(--card-border);border-radius:var(--r-lg);background:var(--card-bg);box-shadow:var(--card-shadow);padding:18px 20px;display:grid;gap:8px;min-height:120px;align-content:start}
+.part-info .code{color:var(--muted)}
+.part-info h3{font-size:var(--fs-md)}
+.part-info p{color:var(--muted);font-size:var(--fs-sm)}
+.part-info .acts{display:flex;flex-wrap:wrap;align-items:center;gap:8px 20px;margin-top:6px}
+
+/* =========================================================
+   2. DIAGNÓSTICO: lista de síntomas + orden de trabajo
+   ========================================================= */
+.diag{display:grid;gap:28px;grid-template-columns:1fr}
+@media (min-width: 900px){ .diag{grid-template-columns:1.1fr .9fr;align-items:start} }
+.symptoms{display:grid;grid-template-columns:1fr;border-top:1px solid var(--line)}
+@media (min-width: 560px){ .symptoms{grid-template-columns:1fr 1fr;column-gap:24px} }
+.sym{display:flex;align-items:center;gap:14px;text-align:left;padding:16px 8px;border:0;border-bottom:1px solid var(--line);background:none;color:var(--ink);font:500 1rem/1.3 var(--f-sans);cursor:pointer;min-height:60px;transition:background-color .15s}
+.sym:hover{background:var(--surface-2)}
+.sym .ico{width:22px;height:22px;color:var(--muted)}
+.sym[aria-pressed="true"]{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent);font-weight:600}
+.sym[aria-pressed="true"] .ico{color:var(--accent)}
+
+/* Orden de trabajo: un impreso de taller */
+.ticket{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r)}
+@media (min-width: 900px){ .ticket{position:sticky;top:calc(var(--nav-h) + 24px)} }
+.ticket-head{display:flex;justify-content:space-between;gap:12px;padding:12px 18px;border-bottom:1px solid var(--rule);font-weight:700;font-stretch:110%}
+#ticket-body{padding:18px;display:grid;gap:14px}
+.ticket h3{font-size:1.2rem}
+.ticket dl{display:grid;grid-template-columns:7.5em 1fr;margin:0;border-top:1px solid var(--line)}
+.ticket dt,.ticket dd{padding:10px 0;border-bottom:1px solid var(--line);margin:0}
+.ticket dt{font-size:var(--fs-sm);color:var(--muted)}
+.ticket dd a{color:var(--accent);font-weight:600}
+.ticket .acts{display:flex;flex-wrap:wrap;align-items:center;gap:10px 20px}
+.ticket .note{color:var(--muted);font-size:.875rem}
+
+/* =========================================================
+   3. SERVICIOS: una tarifa
+   ========================================================= */
+.services{border-top:1px solid var(--rule)}
+.svc{display:grid;grid-template-columns:1fr;gap:6px 32px;padding:22px 0;border-bottom:1px solid var(--line)}
+@media (min-width: 820px){ .svc{grid-template-columns:minmax(0,.9fr) minmax(0,1.4fr) auto;align-items:baseline} }
+.svc h3{display:flex;align-items:center;gap:12px;font-size:1.12rem}
+.svc h3 .ico{width:24px;height:24px;color:var(--accent)}
+.svc p{color:var(--muted)}
+.svc .inc{font-size:var(--fs-sm);color:var(--ink);margin-top:4px}
+.svc .price{font-weight:700;font-stretch:110%;white-space:nowrap}
+.svc-more{margin-top:24px;color:var(--muted)}
+.svc-more a{color:var(--accent);font-weight:600}
+
+/* =========================================================
+   4. ASESOR: ¿mejorarlo o comprar otro?
+   ========================================================= */
+.advisor{display:grid;gap:28px;grid-template-columns:1fr;align-items:start}
+@media (min-width: 900px){ .advisor{grid-template-columns:1fr 1fr} }
+.adv-form{display:grid;gap:24px}
+.adv-form fieldset{border:0;margin:0;padding:0;display:grid;gap:10px;min-width:0}
+.adv-form legend{font-weight:700;padding:0;margin-bottom:10px}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg label{position:relative;cursor:pointer}
+.seg input{position:absolute;opacity:0;inset:0;cursor:pointer}
+.seg span{display:inline-flex;align-items:center;min-height:42px;padding:0 14px;border:1px solid color-mix(in srgb, var(--ink) 28%, var(--line));border-radius:var(--r);background:var(--surface);font-size:.95rem;transition:border-color .15s, background-color .15s}
+.seg label:hover span{border-color:var(--ink)}
+.seg input:checked + span{background:var(--ink);border-color:var(--ink);color:var(--bg);font-weight:600}
+.seg input:focus-visible + span{outline:2px solid var(--accent);outline-offset:2px}
+.verdict{border:1px solid var(--card-border);border-radius:var(--r-lg);background:var(--card-bg);box-shadow:var(--card-shadow);padding:clamp(20px,3vw,30px);display:grid;gap:16px;align-content:start}
+@media (min-width: 900px){ .verdict{position:sticky;top:calc(var(--nav-h) + 24px)} }
+.verdict .code{color:var(--muted)}
+.verdict h3{font-size:var(--fs-lg)}
+.verdict p{color:var(--muted)}
+.verdict ol{padding-left:1.3em;display:grid;gap:8px}
+.verdict ol li::marker{font-weight:700;color:var(--accent)}
+.verdict .note{font-size:.875rem}
+/* Escala de tres posiciones (en lugar de una barra de progreso) */
+.scale{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--rule);border-radius:var(--r);overflow:hidden;font-size:.85rem;text-align:center}
+.scale span{padding:8px 6px;color:var(--muted)}
+.scale span + span{border-left:1px solid var(--rule)}
+.scale .on{background:var(--accent);color:var(--accent-ink);font-weight:700}
+
+
+/* Móvil: la leyenda en dos columnas para que el dibujo no quede tan abajo */
+@media (max-width: 640px){
+  .legend{grid-template-columns:1fr 1fr;gap:0 10px}
+  .legend button{font-size:.88rem;padding:6px 0;align-items:flex-start;gap:8px}
+  .legend .num{width:22px;height:22px;font-size:.72rem}
+}
+/* Móvil: la leyenda en dos columnas para que el dibujo no quede tan abajo */
+@media (max-width: 640px){
+  .legend{grid-template-columns:1fr 1fr;gap:0 10px}
+  .legend button{font-size:.88rem;padding:6px 0;align-items:flex-start;gap:8px}
+  .legend .num{width:22px;height:22px;font-size:.72rem}
+}
+
+/* Secciones de la página de herramientas */
+.tool-sec .section-head{margin-bottom:clamp(24px,3vw,40px)}
+.sym{border-radius:var(--r)}
+.verdict,.ticket,.part-info{border-radius:var(--r-lg)}

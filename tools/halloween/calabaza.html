@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calabaza 3D: banco de pruebas</title>
+<!--
+  Banco de pruebas de la calabaza 3D de la portada (static/js/modules/calabaza-gl.js).
+  Ábrela con un servidor local (node tools/... o python -m http.server) y prueba:
+    ?s=900                 tamaño del lienzo en píxeles (cuadrado)
+    &open=0.6&smileL=0&smileR=1&squint=0.5&light=1&tilt=4&sway=0&yaw=0
+  tools/halloween/foto-calabaza.cjs la usa para sacar la foto fija
+  (static/assets/img/halloween/calabaza-*.webp) que se ve mientras carga.
+-->
+<style>html,body{margin:0;background:#000}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script src="../../static/js/modules/calabaza-gl.js"></script>
+<script src="../../static/js/modules/calabaza-anim.js"></script>
+<script src="calabaza.js"></script>
+</body>
+</html>

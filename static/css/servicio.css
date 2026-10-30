@@ -1,0 +1,64 @@
+/* =========================================================
+   ALEXTOLL · Páginas de servicio (cambiar-disco-ssd-madrid.html, etc.)
+   Usa tokens.css, base.css y layout.css.
+   ========================================================= */
+
+/* Cabecera */
+.svc-hero{padding-block:clamp(28px,4vw,48px) clamp(48px,7vw,88px)}
+.svc-hero .wrap{display:grid;gap:22px;justify-items:start}
+.crumbs{display:flex;flex-wrap:wrap;gap:6px 8px;font-size:var(--fs-sm);color:var(--muted)}
+.crumbs a{color:var(--muted)}
+.crumbs a:hover{color:var(--accent)}
+.crumbs [aria-current]{color:var(--ink)}
+.svc-hero h1{font-size:clamp(2rem,4.4vw,3.2rem);font-weight:800;letter-spacing:-.03em;max-width:20ch}
+.svc-hero .lede{font-size:clamp(1.1rem,1.7vw,1.25rem);color:var(--muted);max-width:56ch;line-height:1.5}
+.svc-hero .cta{display:flex;flex-wrap:wrap;gap:12px}
+.svc-h2{font-size:var(--fs-xl);margin-bottom:clamp(24px,3vw,36px)}
+
+/* Señales + qué incluye */
+.svc-grid{display:grid;gap:36px}
+@media (min-width: 860px){ .svc-grid{grid-template-columns:1.1fr .9fr;align-items:start} }
+.svc-grid h2{font-size:var(--fs-lg);margin-bottom:16px}
+.senales,.incluye ul{list-style:none;margin:0;padding:0;border-top:1px solid var(--rule)}
+.senales li,.incluye li{display:grid;grid-template-columns:24px 1fr;gap:12px;padding:14px 0;border-bottom:1px solid var(--line)}
+.senales .ico{width:22px;height:22px;color:var(--muted);margin-top:1px}
+.incluye{border:1px solid var(--rule);border-radius:var(--r);background:var(--surface);padding:20px 22px}
+.incluye ul{border-top:0}
+.incluye li:last-child{border-bottom:0}
+.incluye .ico{width:22px;height:22px;color:var(--accent);margin-top:1px}
+.precio{margin-top:12px;padding-top:14px;border-top:1px solid var(--rule)}
+
+/* Pasos */
+.pasos{list-style:none;margin:0;padding:0;counter-reset:paso;display:grid;border-top:1px solid var(--rule)}
+@media (min-width: 860px){ .pasos{grid-template-columns:repeat(4,1fr)} }
+.pasos li{display:grid;gap:8px;align-content:start;padding:22px 0 26px;border-bottom:1px solid var(--line)}
+@media (min-width: 860px){
+  .pasos li{padding:22px 24px 8px 0;border-bottom:0}
+  .pasos li + li{padding-left:24px;border-left:1px solid var(--line)}
+}
+.pasos li::before{counter-increment:paso;content:counter(paso);font-size:clamp(2.4rem,4.5vw,3.2rem);font-weight:800;font-stretch:125%;line-height:1;color:var(--accent)}
+.pasos h3{font-size:1.08rem}
+.pasos p{color:var(--muted)}
+
+/* Preguntas */
+.faq{margin:0;display:grid;grid-template-columns:1fr;border-top:1px solid var(--rule)}
+@media (min-width: 820px){ .faq{grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr)} }
+.faq dt,.faq dd{margin:0;padding:18px 0;border-bottom:1px solid var(--line)}
+.faq dt{font-weight:700;font-stretch:108%;padding-bottom:4px;border-bottom:0}
+.faq dd{color:var(--muted);padding-top:0}
+@media (min-width: 820px){
+  .faq dt{padding:20px 32px 20px 0;border-bottom:1px solid var(--line)}
+  .faq dd{padding:20px 0}
+}
+
+/* Relacionadas + llamada final */
+.svc-end{display:grid;gap:36px}
+@media (min-width: 860px){ .svc-end{grid-template-columns:1.2fr .8fr;align-items:start} }
+.related{list-style:none;margin:0;padding:0;border-top:1px solid var(--rule)}
+.related a{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:16px 0;border-bottom:1px solid var(--line);text-decoration:none;font-weight:600;font-stretch:105%}
+.related a:hover{color:var(--accent)}
+.related .ico{width:20px;height:20px;flex:none;transition:transform .2s var(--ease-out)}
+.related a:hover .ico{transform:translateX(3px)}
+.svc-cta{border:1px solid var(--rule);border-radius:var(--r);background:var(--surface);padding:22px;display:grid;gap:12px;justify-items:start}
+.svc-cta h2{font-size:var(--fs-lg)}
+.svc-cta p{color:var(--muted)}
